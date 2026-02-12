@@ -1,0 +1,1151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Antfarm</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=Inter:wght@300;400;500&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #fff;
+    color: #1a1a1a;
+    font-family: 'Inter', -apple-system, sans-serif;
+    height: 100vh;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── Intro ── */
+  .intro {
+    position: fixed;
+    inset: 0;
+    background: #fff;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    transition: opacity 0.8s ease;
+  }
+  .intro.hide { opacity: 0; pointer-events: none; }
+
+  .intro h1 {
+    font-family: 'EB Garamond', serif;
+    font-size: clamp(2.5rem, 5vw, 4.5rem);
+    font-weight: 400;
+    letter-spacing: -0.02em;
+    margin-bottom: 12px;
+  }
+  .intro h1 em { font-style: italic; }
+
+  .intro .sub {
+    color: #999;
+    font-size: 0.82rem;
+    letter-spacing: 0.08em;
+    margin-bottom: 48px;
+  }
+
+  .intro button {
+    background: none;
+    border: 1px solid #ddd;
+    color: #1a1a1a;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.78rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    padding: 14px 44px;
+    cursor: pointer;
+    transition: all 0.3s;
+  }
+  .intro button:hover {
+    border-color: #1a1a1a;
+    background: #1a1a1a;
+    color: #fff;
+  }
+
+  /* ── App ── */
+  .app {
+    display: none;
+    height: 100vh;
+    flex-direction: column;
+  }
+  .app.show { display: flex; }
+
+  /* Top bar */
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 24px;
+    height: 48px;
+    flex-shrink: 0;
+    border-bottom: 1px solid #eee;
+  }
+
+  .topbar .title {
+    font-family: 'EB Garamond', serif;
+    font-size: 1.15rem;
+    font-weight: 400;
+  }
+  .topbar .title em { font-style: italic; }
+
+  .topbar .stats {
+    display: flex;
+    gap: 24px;
+    font-size: 0.72rem;
+    color: #999;
+    letter-spacing: 0.04em;
+  }
+  .topbar .stats .v {
+    color: #1a1a1a;
+    font-weight: 500;
+    margin-left: 6px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Canvas area — fills remaining space */
+  .canvas-wrap {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    background: #000;
+    cursor: crosshair;
+  }
+
+  .canvas-wrap canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+  }
+
+  /* Ant hover tooltip */
+  .ant-tooltip {
+    position: fixed;
+    pointer-events: none;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid #e0e0e0;
+    padding: 8px 12px;
+    font-size: 0.68rem;
+    line-height: 1.5;
+    color: #555;
+    z-index: 50;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+    max-width: 180px;
+    white-space: nowrap;
+  }
+  .ant-tooltip.show { opacity: 1; }
+  .ant-tooltip .tt-name {
+    color: #1a1a1a;
+    font-weight: 500;
+    margin-bottom: 2px;
+    font-size: 0.72rem;
+  }
+  .ant-tooltip .tt-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .ant-tooltip .tt-val { color: #1a1a1a; font-weight: 500; }
+
+  /* Bottom controls bar */
+  .bottombar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1px;
+    height: 40px;
+    flex-shrink: 0;
+    border-top: 1px solid #eee;
+    background: #fff;
+  }
+
+  .bottombar button {
+    background: #fff;
+    border: none;
+    border-right: 1px solid #eee;
+    color: #888;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.7rem;
+    letter-spacing: 0.06em;
+    padding: 0 20px;
+    height: 100%;
+    cursor: pointer;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .bottombar button:last-child { border-right: none; }
+  .bottombar button:hover { background: #f8f8f8; color: #1a1a1a; }
+  .bottombar button .ic { font-size: 0.8rem; }
+
+  .bottombar .speed-label {
+    font-variant-numeric: tabular-nums;
+    min-width: 22px;
+    text-align: center;
+    color: #1a1a1a;
+    font-weight: 500;
+  }
+
+  /* Toast */
+  .toast {
+    position: fixed;
+    bottom: 56px;
+    left: 50%;
+    transform: translateX(-50%) translateY(8px);
+    background: #1a1a1a;
+    color: #fff;
+    padding: 8px 20px;
+    font-size: 0.72rem;
+    letter-spacing: 0.03em;
+    opacity: 0;
+    transition: all 0.25s ease;
+    z-index: 90;
+    pointer-events: none;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+
+<div class="intro" id="intro">
+  <h1><em>Antfarm</em></h1>
+  <p class="sub">a living colony simulation</p>
+  <button onclick="begin()">Enter</button>
+</div>
+
+<div class="app" id="app">
+  <div class="topbar">
+    <div class="title"><em>Antfarm</em></div>
+    <div class="stats">
+      <span>Population<span class="v" id="sAnts">0</span></span>
+      <span>Tunneled<span class="v" id="sTunnel">0%</span></span>
+      <span>Chambers<span class="v" id="sChambers">0</span></span>
+      <span>Dug<span class="v" id="sDug">0</span></span>
+      <span>Day<span class="v" id="sDay">1</span></span>
+    </div>
+  </div>
+
+  <div class="canvas-wrap" id="wrap">
+    <canvas id="c"></canvas>
+  </div>
+
+  <div class="bottombar">
+    <button onclick="dropAnts(5)"><span class="ic">+</span> 5 ants</button>
+    <button onclick="dropAnts(1)"><span class="ic">+</span> 1 ant</button>
+    <button onclick="dropFood()"><span class="ic">&#9679;</span> food</button>
+    <button onclick="cycleSpeed()"><span class="ic">&#9654;</span> <span class="speed-label" id="speedLabel">1x</span></button>
+    <button onclick="togglePause()" id="pauseBtn">&#10074;&#10074; pause</button>
+  </div>
+</div>
+
+<div class="ant-tooltip" id="tooltip">
+  <div class="tt-name" id="ttName"></div>
+  <div class="tt-row"><span>State</span><span class="tt-val" id="ttState"></span></div>
+  <div class="tt-row"><span>Energy</span><span class="tt-val" id="ttEnergy"></span></div>
+  <div class="tt-row"><span>Age</span><span class="tt-val" id="ttAge"></span></div>
+  <div class="tt-row"><span>Trait</span><span class="tt-val" id="ttTrait"></span></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+//  ANTFARM — Agentic Colony Simulation
+// ═══════════════════════════════════════════════════════════
+
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const tooltip = document.getElementById('tooltip');
+
+// ── Sizing: we render at a fixed internal resolution
+//    then CSS scales to fill the viewport ──
+const INTERNAL_W = 960, INTERNAL_H = 640;
+const CELL = 4;
+const COLS = INTERNAL_W / CELL | 0;
+const ROWS = INTERNAL_H / CELL | 0;
+const SURFACE = 8;
+const SURFACE_PX = SURFACE * CELL;
+
+// ── State ──
+let grid, phTrail, phFood;
+let ants = [], foods = [], particles = [], chambers = [];
+let frame = 0, totalDug = 0, simDay = 1;
+let speed = 1, paused = false, running = false;
+let hoveredAnt = null;
+let mouseX = 0, mouseY = 0;
+
+// Dirt palette [r, g, b] indexed by density 1-5
+const DIRT = [
+  null,
+  [162, 117, 76],   // topsoil — warm tan
+  [143, 98, 58],    // soil
+  [118, 78, 42],    // clay
+  [94, 60, 28],     // deep
+  [68, 44, 18],     // bedrock
+];
+
+// ═══════════════════════════════════════════════════════════
+//  TERRAIN
+// ═══════════════════════════════════════════════════════════
+
+function hash(x, y) {
+  const n = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453;
+  return n - Math.floor(n);
+}
+
+function fbm(x, y) {
+  return hash(x, y) * 0.5 + hash(x * 2.1, y * 2.3) * 0.25 + hash(x * 4.7, y * 4.1) * 0.125;
+}
+
+function initTerrain() {
+  grid = new Uint8Array(COLS * ROWS);
+  phTrail = new Float32Array(COLS * ROWS);
+  phFood = new Float32Array(COLS * ROWS);
+
+  for (let y = 0; y < ROWS; y++) {
+    for (let x = 0; x < COLS; x++) {
+      if (y < SURFACE) { grid[y * COLS + x] = 0; continue; }
+      const d = (y - SURFACE) / (ROWS - SURFACE);
+      const base = 1 + d * 4;
+      const n = fbm(x * 0.04, y * 0.04) - 0.4;
+      grid[y * COLS + x] = Math.max(1, Math.min(5, Math.round(base + n * 2)));
+    }
+  }
+
+  // Rocks
+  for (let k = 0; k < 14; k++) {
+    const cx = (Math.random() * (COLS - 10) + 5) | 0;
+    const cy = (Math.random() * (ROWS - SURFACE - 14) + SURFACE + 8) | 0;
+    const r = 2 + (Math.random() * 3) | 0;
+    for (let dy = -r; dy <= r; dy++)
+      for (let dx = -r; dx <= r; dx++)
+        if (dx * dx + dy * dy <= r * r) {
+          const nx = cx + dx, ny = cy + dy;
+          if (nx >= 0 && nx < COLS && ny >= SURFACE && ny < ROWS)
+            grid[ny * COLS + nx] = 5;
+        }
+  }
+}
+
+function cell(x, y) {
+  if (x < 0 || x >= COLS || y < 0 || y >= ROWS) return 255;
+  return grid[y * COLS + x];
+}
+function solid(x, y) { return cell(x, y) > 0; }
+
+function dig(x, y) {
+  if (x < 0 || x >= COLS || y < 0 || y >= ROWS) return false;
+  const i = y * COLS + x;
+  if (grid[i] === 0) return false;
+  if (grid[i] <= 1) { grid[i] = 0; totalDug++; return true; }
+  grid[i]--;
+  return false;
+}
+
+function gravity() {
+  for (let y = ROWS - 2; y >= SURFACE; y--) {
+    for (let x = 0; x < COLS; x++) {
+      const v = grid[y * COLS + x];
+      if (v === 0 || v > 2) continue;
+      if (cell(x, y + 1) === 0) {
+        grid[(y + 1) * COLS + x] = v; grid[y * COLS + x] = 0;
+      } else {
+        const cl = cell(x-1, y+1) === 0 && cell(x-1, y) === 0;
+        const cr = cell(x+1, y+1) === 0 && cell(x+1, y) === 0;
+        if (cl && cr) { const d = Math.random() < 0.5 ? -1 : 1; grid[(y+1)*COLS+(x+d)] = v; grid[y*COLS+x] = 0; }
+        else if (cl) { grid[(y+1)*COLS+(x-1)] = v; grid[y*COLS+x] = 0; }
+        else if (cr) { grid[(y+1)*COLS+(x+1)] = v; grid[y*COLS+x] = 0; }
+      }
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  PHEROMONES
+// ═══════════════════════════════════════════════════════════
+
+function phSet(x, y, v, m) { if (x>=0&&x<COLS&&y>=0&&y<ROWS) m[y*COLS+x] = Math.min(3, m[y*COLS+x]+v); }
+function phGet(x, y, m) { return (x>=0&&x<COLS&&y>=0&&y<ROWS) ? m[y*COLS+x] : 0; }
+
+function phDecay() {
+  for (let i = phTrail.length - 1; i >= 0; i--) {
+    phTrail[i] *= 0.9975;
+    phFood[i] *= 0.9965;
+    if (phTrail[i] < 0.005) phTrail[i] = 0;
+    if (phFood[i] < 0.005) phFood[i] = 0;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  CHAMBERS
+// ═══════════════════════════════════════════════════════════
+
+function detectChambers() {
+  chambers = [];
+  const vis = new Uint8Array(COLS * ROWS);
+  for (let y = SURFACE + 3; y < ROWS; y++) {
+    for (let x = 0; x < COLS; x++) {
+      const i = y * COLS + x;
+      if (grid[i] === 0 && !vis[i]) {
+        let n = 0, sx = 0, sy = 0;
+        const q = [[x, y]]; vis[i] = 1;
+        while (q.length && n < 600) {
+          const [cx, cy] = q.pop(); n++; sx += cx; sy += cy;
+          for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+            const nx = cx+dx, ny = cy+dy;
+            if (nx>=0&&nx<COLS&&ny>=SURFACE&&ny<ROWS) {
+              const ni = ny*COLS+nx;
+              if (!grid[ni] && !vis[ni]) { vis[ni]=1; q.push([nx,ny]); }
+            }
+          }
+        }
+        if (n >= 35) chambers.push({ x: (sx/n)*CELL, y: (sy/n)*CELL, size: n });
+      }
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  ANT AGENT
+// ═══════════════════════════════════════════════════════════
+
+const ST = { WANDER:0, ENTER:1, DIG_DOWN:2, DIG_BRANCH:3, DIG_CHAMBER:4, EXPLORE:5, GO_UP:6, FORAGE:7, CARRY:8, REST:9 };
+const ST_NAMES = ['Wandering','Entering tunnel','Digging down','Branching','Carving chamber','Exploring','Returning','Foraging','Carrying food','Resting'];
+
+let nextId = 1;
+
+// Real ant speed: ~1.5cm/s. If we say the farm is ~40cm wide (real ant farm),
+// that means 1 ant-body-length ≈ 2mm, farm ≈ 200 ant-lengths across.
+// Our canvas is 960px, so 1 ant-length ≈ 5px. 1.5cm/s ≈ 7.5 body-lengths/s
+// At 60fps that's ~0.6px/frame. We'll use ~0.5-0.7 px/frame base speed.
+const ANT_SPEED = 0.55;
+
+class Ant {
+  constructor(x, y) {
+    this.id = nextId++;
+    this.x = x; this.y = y;
+    this.px = x; this.py = y;
+    this.vx = 0; this.vy = 0;
+    this.state = ST.WANDER;
+    this.energy = 800 + Math.random() * 200;
+    this.carrying = false;
+    this.age = 0;
+    this.stuck = 0;
+    this.digCD = 0;
+    this.restT = 0;
+    this.patience = 0;
+
+    // Unique personality
+    this.trait = {
+      digDrive: 0.3 + Math.random() * 0.7,
+      explore: Math.random(),
+      follow: 0.2 + Math.random() * 0.6,
+      depth: 0.15 + Math.random() * 0.75,
+      chamber: Math.random(),
+      bias: (Math.random() - 0.5) * 0.4,
+    };
+
+    this.digAngle = Math.PI * 0.5;
+    this.wanderAngle = Math.random() * Math.PI * 2;
+    this.targetX = -1;
+    this.targetY = -1;
+
+    // Name
+    const names = ['Ada','Bo','Cal','Dee','Emi','Fay','Gil','Hal','Ira','Joy','Kai','Leo','Mae','Neo','Ora','Pip','Quinn','Rex','Sol','Tia','Uma','Val','Wren','Xia','Yui','Zoe'];
+    this.name = names[this.id % names.length] + '-' + this.id;
+
+    // Dominant trait label
+    const t = this.trait;
+    if (t.digDrive > t.explore && t.digDrive > t.follow) this.traitLabel = 'Digger';
+    else if (t.explore > t.follow) this.traitLabel = 'Explorer';
+    else this.traitLabel = 'Follower';
+
+    // Look
+    this.size = 2.3 + Math.random() * 0.4;
+    const s = 28 + Math.random() * 30;
+    this.cr = s + Math.random() * 12;
+    this.cg = s * 0.5 + Math.random() * 6;
+    this.cb = s * 0.3 + Math.random() * 4;
+    this.legT = Math.random() * 6.28;
+    this.antT = Math.random() * 6.28;
+  }
+
+  gx() { return (this.x / CELL) | 0; }
+  gy() { return (this.y / CELL) | 0; }
+  depthR() { return Math.max(0, (this.gy() - SURFACE) / (ROWS - SURFACE)); }
+  atSurface() { return this.gy() <= SURFACE + 1; }
+
+  sense() {
+    const gx = this.gx(), gy = this.gy();
+    const s = {
+      gx, gy,
+      surface: this.atSurface(),
+      depth: this.depthR(),
+      below: solid(gx, gy + 1),
+      above: solid(gx, gy - 1),
+      left: solid(gx - 1, gy),
+      right: solid(gx + 1, gy),
+      food: null, foodDist: 999,
+      phDir: null, phVal: 0,
+      nearAnts: 0,
+    };
+
+    for (const f of foods) {
+      const d = Math.hypot(f.x - this.x, f.y - this.y);
+      if (d < 50 && d < s.foodDist) { s.food = f; s.foodDist = d; }
+    }
+
+    let best = 0, bestA = null;
+    const m = this.carrying ? phTrail : phFood;
+    for (let a = 0; a < 6.28; a += 0.785) {
+      const v = phGet(gx + Math.round(Math.cos(a) * 3), gy + Math.round(Math.sin(a) * 3), m);
+      if (v > best) { best = v; bestA = a; }
+    }
+    s.phVal = best; s.phDir = bestA;
+
+    for (const a of ants) if (a !== this && Math.hypot(a.x - this.x, a.y - this.y) < 30) s.nearAnts++;
+    return s;
+  }
+
+  think(s) {
+    if (this.energy < 40) { this.state = ST.REST; return; }
+    if (this.state === ST.REST) {
+      this.restT++; this.energy += 0.8;
+      if (this.restT > 80 || this.energy > 300) { this.restT = 0; this.state = ST.WANDER; }
+      return;
+    }
+    if (this.carrying) { this.state = ST.CARRY; return; }
+    if (s.food && !this.carrying) {
+      this.state = ST.FORAGE; this.targetX = s.food.x; this.targetY = s.food.y; return;
+    }
+
+    if (s.surface) {
+      if (this.carrying) { this.carrying = false; }
+      if (s.phVal > 0.15 && this.trait.follow > 0.4) { this.state = ST.FORAGE; return; }
+
+      this.patience++;
+      const thresh = 100 * (1 - this.trait.digDrive * 0.6);
+      if (this.patience > thresh) {
+        this.patience = 0;
+        // Find existing tunnel entrance?
+        let entrance = null;
+        for (let dx = -40; dx <= 40; dx += 2) {
+          const ex = this.gx() + dx;
+          if (ex >= 0 && ex < COLS && cell(ex, SURFACE + 1) === 0 && cell(ex, SURFACE + 2) === 0) {
+            if (!entrance || Math.abs(dx) < Math.abs(entrance)) entrance = dx;
+          }
+        }
+        if (entrance !== null && Math.random() < this.trait.follow) {
+          this.targetX = (this.gx() + entrance) * CELL;
+          this.state = ST.ENTER;
+        } else {
+          this.state = ST.DIG_DOWN;
+          this.digAngle = Math.PI * 0.5 + this.trait.bias;
+        }
+        return;
+      }
+      this.state = ST.WANDER;
+      return;
+    }
+
+    // Underground logic
+    if (this.state === ST.DIG_DOWN || this.state === ST.DIG_BRANCH || this.state === ST.DIG_CHAMBER) {
+      if (s.depth > this.trait.depth && this.state === ST.DIG_DOWN) {
+        if (Math.random() < this.trait.chamber * 0.4) { this.state = ST.DIG_CHAMBER; this.patience = 0; }
+        else if (Math.random() < 0.5) { this.state = ST.DIG_BRANCH; this.digAngle = (Math.random() < 0.5 ? 0 : Math.PI) + (Math.random()-0.5)*0.6; }
+        else this.state = ST.EXPLORE;
+        return;
+      }
+      if (this.state === ST.DIG_CHAMBER) {
+        this.patience++;
+        if (this.patience > 80 + Math.random() * 60) { this.state = Math.random()<0.4 ? ST.GO_UP : ST.EXPLORE; this.patience=0; }
+        return;
+      }
+      if (this.state === ST.DIG_BRANCH) {
+        if (Math.random() < 0.008) this.digAngle += (Math.random()-0.5)*1.0;
+        if (Math.random() < 0.006) this.state = Math.random()<0.5 ? ST.GO_UP : ST.EXPLORE;
+        return;
+      }
+      if (Math.random() < 0.015) {
+        this.digAngle += (Math.random()-0.5)*0.5;
+        this.digAngle = Math.max(0.2, Math.min(Math.PI-0.2, this.digAngle));
+      }
+      return;
+    }
+
+    if (this.state === ST.EXPLORE) {
+      if (s.phVal > 0.2 && Math.random() < this.trait.follow) this.wanderAngle = s.phDir;
+      if (Math.random() < 0.003) {
+        this.state = this.trait.digDrive > 0.5 && Math.random() < 0.5 ? ST.DIG_BRANCH : ST.GO_UP;
+        this.digAngle = this.wanderAngle + (Math.random()-0.5)*1.2;
+      }
+      return;
+    }
+
+    if (this.state === ST.GO_UP || this.state === ST.CARRY) {
+      if (s.surface) { this.state = ST.WANDER; this.patience = 0; if (this.carrying) this.carrying = false; }
+      return;
+    }
+
+    this.state = ST.EXPLORE;
+  }
+
+  act(s) {
+    this.age++;
+    this.energy -= 0.12;
+    const moving = this.state !== ST.REST;
+    this.legT += moving ? 0.18 : 0;
+    this.antT += 0.06;
+    if (this.digCD > 0) this.digCD--;
+
+    const gx = s.gx, gy = s.gy;
+    if (this.carrying) phSet(gx, gy, 0.6, phFood);
+    phSet(gx, gy, 0.12, phTrail);
+
+    switch (this.state) {
+      case ST.WANDER: this._wander(s); break;
+      case ST.ENTER: this._enter(s); break;
+      case ST.DIG_DOWN: case ST.DIG_BRANCH: this._digTunnel(s); break;
+      case ST.DIG_CHAMBER: this._digChamber(s); break;
+      case ST.EXPLORE: this._explore(s); break;
+      case ST.GO_UP: case ST.CARRY: this._goUp(s); break;
+      case ST.FORAGE: this._forage(s); break;
+      case ST.REST: break;
+    }
+
+    // Pick up food
+    if (!this.carrying) {
+      for (let i = foods.length - 1; i >= 0; i--) {
+        if (Math.hypot(foods[i].x - this.x, foods[i].y - this.y) < CELL * 2) {
+          foods[i].amount--;
+          if (foods[i].amount <= 0) foods.splice(i, 1);
+          this.carrying = true;
+          this.energy = Math.min(1000, this.energy + 400);
+          this.state = ST.CARRY;
+          break;
+        }
+      }
+    }
+    if (this.carrying && s.surface) { this.carrying = false; this.state = ST.WANDER; }
+
+    // Physics
+    if (!s.below && gy < ROWS - 1) this.vy += 0.1;
+    if ((s.left || s.right) && !s.below) this.vy *= 0.4;
+
+    const maxV = ANT_SPEED * 3.5;
+    this.vx = Math.max(-maxV, Math.min(maxV, this.vx));
+    this.vy = Math.max(-maxV, Math.min(maxV, this.vy));
+
+    this.px = this.x; this.py = this.y;
+    let nx = this.x + this.vx, ny = this.y + this.vy;
+    const ngx = (nx / CELL) | 0, ngy = (ny / CELL) | 0;
+
+    const digging = this.state === ST.DIG_DOWN || this.state === ST.DIG_BRANCH || this.state === ST.DIG_CHAMBER;
+    if (solid(ngx, ngy) && !digging) {
+      if (!solid(gx, ngy)) { nx = this.x; this.vx *= 0.2; }
+      else if (!solid(ngx, gy)) { ny = this.y; this.vy *= 0.2; }
+      else { nx = this.x; ny = this.y; this.vx *= 0.1; this.vy *= 0.1; this.stuck++; }
+    } else { this.stuck = 0; }
+
+    if (this.stuck > 40) { this._unstick(gx, gy); this.stuck = 0; }
+
+    this.x = Math.max(CELL, Math.min(INTERNAL_W - CELL, nx));
+    this.y = Math.max(CELL, Math.min(INTERNAL_H - CELL, ny));
+  }
+
+  _wander(s) {
+    this.wanderAngle += (Math.random() - 0.5) * 0.2;
+    this.vx += Math.cos(this.wanderAngle) * ANT_SPEED * 0.4;
+    if (this.y < SURFACE_PX - CELL * 2) this.vy += 0.12;
+    if (this.y > SURFACE_PX + CELL) this.vy -= 0.12;
+    if (this.x < CELL * 4) this.wanderAngle = 0;
+    if (this.x > INTERNAL_W - CELL * 4) this.wanderAngle = Math.PI;
+    this.vx *= 0.91; this.vy *= 0.91;
+  }
+
+  _enter(s) {
+    if (this.targetX >= 0) {
+      const dx = this.targetX - this.x;
+      if (Math.abs(dx) > CELL * 2) { this.vx += Math.sign(dx) * ANT_SPEED * 0.5; }
+      else { this.vy += ANT_SPEED * 0.5; this.state = ST.EXPLORE; this.targetX = -1; }
+    }
+    this.vx *= 0.9; this.vy *= 0.9;
+  }
+
+  _digTunnel(s) {
+    const dx = Math.cos(this.digAngle), dy = Math.sin(this.digAngle);
+    this.vx += dx * ANT_SPEED * 0.25;
+    this.vy += dy * ANT_SPEED * 0.35;
+    this.vx *= 0.82; this.vy *= 0.82;
+
+    if (this.digCD <= 0) {
+      const fwdX = s.gx + Math.round(dx * 1.5);
+      const fwdY = s.gy + Math.round(dy * 1.5);
+      for (let ddx = -1; ddx <= 1; ddx++)
+        for (let ddy = -1; ddy <= 1; ddy++)
+          if (Math.abs(ddx)+Math.abs(ddy) <= 1 || Math.random() < 0.35)
+            dig(fwdX + ddx, fwdY + ddy);
+      if (Math.random() < 0.3) { dig(fwdX + (Math.random()<0.5?-2:2), fwdY); dig(fwdX, fwdY + (Math.random()<0.5?-2:2)); }
+      this.digCD = 3 + (Math.random() * 3) | 0;
+      this.energy -= 0.3;
+      phSet(s.gx, s.gy, 0.5, phTrail);
+      if (Math.random() < 0.4) spawnDirt(fwdX * CELL, fwdY * CELL);
+    }
+  }
+
+  _digChamber(s) {
+    this.wanderAngle += 0.06 + Math.random() * 0.04;
+    this.vx += Math.cos(this.wanderAngle) * ANT_SPEED * 0.35;
+    this.vy += Math.sin(this.wanderAngle) * ANT_SPEED * 0.35;
+    this.vx *= 0.8; this.vy *= 0.8;
+    if (this.digCD <= 0) {
+      for (let ddx = -2; ddx <= 2; ddx++)
+        for (let ddy = -2; ddy <= 2; ddy++)
+          if (ddx*ddx+ddy*ddy <= 5 && Math.random() < 0.5)
+            dig(s.gx+ddx, s.gy+ddy);
+      this.digCD = 3; this.energy -= 0.4;
+      if (Math.random() < 0.3) spawnDirt(this.x, this.y);
+    }
+  }
+
+  _explore(s) {
+    this.wanderAngle += (Math.random() - 0.5) * 0.4;
+    const tx = s.gx + Math.round(Math.cos(this.wanderAngle) * 2);
+    const ty = s.gy + Math.round(Math.sin(this.wanderAngle) * 2);
+    if (!solid(tx, ty)) {
+      this.vx += Math.cos(this.wanderAngle) * ANT_SPEED * 0.4;
+      this.vy += Math.sin(this.wanderAngle) * ANT_SPEED * 0.3;
+    } else {
+      this.wanderAngle += Math.PI * 0.5 + (Math.random() - 0.5);
+      if (Math.random() < this.trait.digDrive * 0.1 && this.digCD <= 0) {
+        dig(tx, ty); this.digCD = 10; spawnDirt(tx * CELL, ty * CELL);
+      }
+    }
+    if (s.left && !s.right) this.vx += 0.08;
+    if (s.right && !s.left) this.vx -= 0.08;
+    this.vx *= 0.86; this.vy *= 0.86;
+  }
+
+  _goUp(s) {
+    this.vy -= ANT_SPEED * 0.35;
+    let best = -Math.PI / 2, bestS = -999;
+    for (let a = -Math.PI; a < Math.PI; a += 0.52) {
+      const cx = s.gx + Math.round(Math.cos(a) * 2);
+      const cy = s.gy + Math.round(Math.sin(a) * 2);
+      if (!solid(cx, cy)) {
+        const sc = -Math.sin(a) * 2 + phGet(cx, cy, phTrail) * 0.5;
+        if (sc > bestS) { bestS = sc; best = a; }
+      }
+    }
+    this.vx += Math.cos(best) * ANT_SPEED * 0.4;
+    this.vy += Math.sin(best) * ANT_SPEED * 0.4;
+    if (this.stuck > 12 && this.digCD <= 0) { dig(s.gx, s.gy-1); dig(s.gx, s.gy-2); this.digCD = 4; }
+    this.vx *= 0.86; this.vy *= 0.86;
+  }
+
+  _forage(s) {
+    if (this.targetX >= 0) {
+      const dx = this.targetX - this.x, dy = this.targetY - this.y, d = Math.hypot(dx, dy);
+      if (d > 3) { this.vx += (dx/d) * ANT_SPEED * 0.6; this.vy += (dy/d) * ANT_SPEED * 0.6; }
+    } else if (s.phDir !== null) {
+      this.vx += Math.cos(s.phDir) * ANT_SPEED * 0.4;
+      this.vy += Math.sin(s.phDir) * ANT_SPEED * 0.4;
+    }
+    this.vx *= 0.88; this.vy *= 0.88;
+  }
+
+  _unstick(gx, gy) {
+    const seen = new Set(); const q = [[gx, gy]]; seen.add(gx+','+gy);
+    while (q.length) {
+      const [cx, cy] = q.shift();
+      if (!solid(cx, cy) && cy >= 0 && cy < ROWS) {
+        this.x = cx*CELL+CELL/2; this.y = cy*CELL+CELL/2; this.vx=this.vy=0; return;
+      }
+      for (const [dx,dy] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+        const nx=cx+dx, ny=cy+dy, k=nx+','+ny;
+        if (!seen.has(k)&&nx>=0&&nx<COLS&&ny>=0&&ny<ROWS) { seen.add(k); q.push([nx,ny]); }
+      }
+      if (seen.size > 200) break;
+    }
+  }
+
+  update() { const s = this.sense(); this.think(s); this.act(s); }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  PARTICLES
+// ═══════════════════════════════════════════════════════════
+
+function spawnDirt(x, y) {
+  for (let i = 0; i < 3; i++)
+    particles.push({
+      x: x + Math.random() * CELL, y: y + Math.random() * CELL,
+      vx: (Math.random()-0.5)*1.5, vy: -Math.random()*1.2-0.4,
+      life: 22+Math.random()*18, size: 0.8+Math.random()*1,
+      r: 110+Math.random()*40, g: 70+Math.random()*20, b: 30+Math.random()*15,
+    });
+}
+
+function tickParticles() {
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx; p.y += p.vy; p.vy += 0.06; p.vx *= 0.97;
+    if (--p.life <= 0) particles.splice(i, 1);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  RENDERING
+// ═══════════════════════════════════════════════════════════
+
+const terrainData = new ImageData(INTERNAL_W, INTERNAL_H);
+
+function renderTerrain() {
+  const d = terrainData.data;
+
+  // Sky — very subtle warm gray
+  for (let y = 0; y < SURFACE_PX; y++) {
+    const t = y / SURFACE_PX;
+    const r = 22 + t * 4, g = 20 + t * 3, b = 24 + t * 2;
+    for (let x = 0; x < INTERNAL_W; x++) {
+      const i = (y * INTERNAL_W + x) * 4;
+      d[i] = r; d[i+1] = g; d[i+2] = b; d[i+3] = 255;
+    }
+  }
+
+  // Ground
+  for (let gy = SURFACE; gy < ROWS; gy++) {
+    for (let gx = 0; gx < COLS; gx++) {
+      const v = grid[gy * COLS + gx];
+      const px = gx * CELL, py = gy * CELL;
+
+      if (v > 0) {
+        const c = DIRT[v];
+        const depthF = 1 - ((gy - SURFACE) / (ROWS - SURFACE)) * 0.28;
+        const n = ((gx * 7 + gy * 13) % 19) - 9;
+        const aboveAir = cell(gx, gy-1) === 0;
+        const belowAir = cell(gx, gy+1) === 0;
+        const leftAir = cell(gx-1, gy) === 0;
+        const rightAir = cell(gx+1, gy) === 0;
+
+        for (let dy = 0; dy < CELL; dy++) {
+          for (let dx = 0; dx < CELL; dx++) {
+            const i = ((py+dy)*INTERNAL_W + (px+dx)) * 4;
+            let r = (c[0] + n) * depthF;
+            let g = (c[1] + n*0.7) * depthF;
+            let b = (c[2] + n*0.4) * depthF;
+
+            // Edge highlights — light from above
+            if (aboveAir && dy === 0) { r += 15; g += 10; b += 5; }
+            if (leftAir && dx === 0) { r += 8; g += 5; b += 3; }
+            // Edge shadows
+            if (belowAir && dy === CELL-1) { r -= 8; g -= 6; b -= 3; }
+            if (rightAir && dx === CELL-1) { r -= 4; g -= 3; b -= 2; }
+
+            d[i] = Math.max(0,Math.min(255,r));
+            d[i+1] = Math.max(0,Math.min(255,g));
+            d[i+2] = Math.max(0,Math.min(255,b));
+            d[i+3] = 255;
+          }
+        }
+      } else if (gy >= SURFACE) {
+        const dt = (gy - SURFACE) / (ROWS - SURFACE);
+        const br = 7 - dt * 4, bg = 6 - dt * 3, bb = 9 - dt * 4;
+        const ph = phTrail[gy*COLS+gx], fp = phFood[gy*COLS+gx];
+
+        for (let dy = 0; dy < CELL; dy++) {
+          for (let dx = 0; dx < CELL; dx++) {
+            const i = ((py+dy)*INTERNAL_W + (px+dx)) * 4;
+            d[i] = Math.min(40, br + ph * 12 + fp * 6);
+            d[i+1] = Math.min(40, bg + ph * 5 + fp * 18);
+            d[i+2] = Math.min(40, bb + ph * 16 + fp * 5);
+            d[i+3] = 255;
+          }
+        }
+      }
+    }
+  }
+
+  ctx.putImageData(terrainData, 0, 0);
+}
+
+function renderSurface() {
+  const y = SURFACE_PX;
+  // Thin surface line
+  ctx.strokeStyle = 'rgba(80, 65, 45, 0.4)';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(INTERNAL_W, y); ctx.stroke();
+
+  // Sparse grass
+  ctx.lineWidth = 0.7;
+  for (let x = 0; x < INTERNAL_W; x += 7) {
+    const h = 2 + Math.sin(x * 0.11 + frame * 0.006) * 1.5;
+    const sway = Math.sin(frame * 0.012 + x * 0.04) * 1;
+    const g = 45 + ((x * 3) % 25);
+    ctx.strokeStyle = `rgba(${g}, ${65+((x*7)%25)}, 28, 0.4)`;
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + sway, y - h); ctx.stroke();
+  }
+}
+
+function renderFood() {
+  for (const f of foods) {
+    const p = 1 + Math.sin(frame * 0.05) * 0.12;
+    const r = 2.5 + f.amount * 0.7;
+    ctx.beginPath(); ctx.arc(f.x, f.y, r * 2 * p, 0, 6.28);
+    ctx.fillStyle = 'rgba(70,170,50,0.06)'; ctx.fill();
+    ctx.beginPath(); ctx.arc(f.x, f.y, r * p, 0, 6.28);
+    ctx.fillStyle = 'rgba(90,190,60,0.85)'; ctx.fill();
+  }
+}
+
+function renderParticles() {
+  for (const p of particles) {
+    const a = Math.max(0, p.life / 40);
+    ctx.fillStyle = `rgba(${p.r|0},${p.g|0},${p.b|0},${a.toFixed(2)})`;
+    ctx.fillRect(p.x, p.y, p.size, p.size);
+  }
+}
+
+function renderAnts() {
+  for (const ant of ants) {
+    const x = ant.x, y = ant.y, s = ant.size;
+    const angle = Math.atan2(ant.vy, ant.vx);
+    const mov = Math.hypot(ant.vx, ant.vy) > 0.08;
+
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(angle);
+
+    const r = ant.cr, g = ant.cg, b = ant.cb;
+    ctx.fillStyle = `rgb(${r|0},${g|0},${b|0})`;
+
+    // Abdomen
+    ctx.beginPath(); ctx.ellipse(-s*1.3, 0, s*1.05, s*0.72, 0, 0, 6.28); ctx.fill();
+    // Thorax
+    ctx.beginPath(); ctx.ellipse(0, 0, s*0.6, s*0.5, 0, 0, 6.28); ctx.fill();
+    // Head
+    ctx.beginPath(); ctx.ellipse(s*0.95, 0, s*0.55, s*0.45, 0, 0, 6.28); ctx.fill();
+
+    // Mandibles
+    ctx.strokeStyle = `rgb(${(r*0.7)|0},${(g*0.7)|0},${(b*0.7)|0})`;
+    ctx.lineWidth = 0.6;
+    ctx.beginPath(); ctx.moveTo(s*1.4,-s*0.12); ctx.lineTo(s*1.72,-s*0.28); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(s*1.4,s*0.12); ctx.lineTo(s*1.72,s*0.28); ctx.stroke();
+
+    // Legs
+    ctx.lineWidth = 0.5;
+    ctx.strokeStyle = `rgba(${r|0},${g|0},${b|0},0.75)`;
+    for (let i = 0; i < 3; i++) {
+      const ph = mov ? Math.sin(ant.legT + i * 1.1) * 0.42 : 0.2;
+      const lx = -s*0.5 + i*s*0.55;
+      ctx.beginPath(); ctx.moveTo(lx,0); ctx.lineTo(lx+Math.cos(ph+0.9)*s*1.3, s*1.05+Math.sin(ph)*s*0.4); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(lx,0); ctx.lineTo(lx+Math.cos(-ph-0.9)*s*1.3, -s*1.05-Math.sin(ph)*s*0.4); ctx.stroke();
+    }
+
+    // Antennae
+    ctx.lineWidth = 0.4;
+    const a1 = Math.sin(ant.antT)*0.22, a2 = Math.sin(ant.antT+0.8)*0.22;
+    ctx.beginPath(); ctx.moveTo(s*1.3,-s*0.18); ctx.quadraticCurveTo(s*1.75,-s*0.85+a1*s,s*2.2,-s*0.55+a1*s); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(s*1.3,s*0.18); ctx.quadraticCurveTo(s*1.75,s*0.85+a2*s,s*2.2,s*0.55+a2*s); ctx.stroke();
+
+    // Carrying food
+    if (ant.carrying) {
+      ctx.fillStyle = 'rgba(90,190,60,0.85)';
+      ctx.beginPath(); ctx.arc(s*1.6,0,s*0.32,0,6.28); ctx.fill();
+    }
+
+    // Dig glow
+    if (ant.state === ST.DIG_DOWN || ant.state === ST.DIG_BRANCH || ant.state === ST.DIG_CHAMBER) {
+      ctx.fillStyle = 'rgba(220,150,50,0.06)';
+      ctx.beginPath(); ctx.arc(0,0,s*4,0,6.28); ctx.fill();
+    }
+
+    ctx.restore();
+  }
+}
+
+function render() {
+  renderTerrain();
+  renderSurface();
+  renderFood();
+  renderParticles();
+  renderAnts();
+}
+
+// ═══════════════════════════════════════════════════════════
+//  HOVER / TOOLTIP
+// ═══════════════════════════════════════════════════════════
+
+function updateTooltip() {
+  if (!running) return;
+  const wrap = document.getElementById('wrap');
+  const rect = wrap.getBoundingClientRect();
+  // Convert mouse to canvas coords
+  const scaleX = INTERNAL_W / rect.width;
+  const scaleY = INTERNAL_H / rect.height;
+  const cx = (mouseX - rect.left) * scaleX;
+  const cy = (mouseY - rect.top) * scaleY;
+
+  hoveredAnt = null;
+  let closest = 12; // hover radius in canvas pixels
+  for (const ant of ants) {
+    const d = Math.hypot(ant.x - cx, ant.y - cy);
+    if (d < closest) { closest = d; hoveredAnt = ant; }
+  }
+
+  if (hoveredAnt) {
+    const a = hoveredAnt;
+    document.getElementById('ttName').textContent = a.name;
+    document.getElementById('ttState').textContent = ST_NAMES[a.state];
+    document.getElementById('ttEnergy').textContent = Math.round(a.energy);
+    document.getElementById('ttAge').textContent = Math.round(a.age / 60) + 's';
+    document.getElementById('ttTrait').textContent = a.traitLabel;
+    tooltip.classList.add('show');
+    tooltip.style.left = (mouseX + 14) + 'px';
+    tooltip.style.top = (mouseY - 10) + 'px';
+  } else {
+    tooltip.classList.remove('show');
+  }
+}
+
+document.addEventListener('mousemove', e => {
+  mouseX = e.clientX;
+  mouseY = e.clientY;
+  updateTooltip();
+});
+
+// ═══════════════════════════════════════════════════════════
+//  GAME LOOP
+// ═══════════════════════════════════════════════════════════
+
+function tick() {
+  if (!paused) {
+    for (let s = 0; s < speed; s++) {
+      for (const ant of ants) ant.update();
+      if (frame % 4 === 0) gravity();
+      if (frame % 12 === 0) phDecay();
+      tickParticles();
+      for (let i = ants.length - 1; i >= 0; i--)
+        if (ants[i].energy <= 0) ants.splice(i, 1);
+      frame++;
+      simDay = 1 + (frame / 3600) | 0;
+    }
+    if (frame % 300 === 0) detectChambers();
+  }
+  render();
+  updateHUD();
+  requestAnimationFrame(tick);
+}
+
+// ═══════════════════════════════════════════════════════════
+//  UI
+// ═══════════════════════════════════════════════════════════
+
+function updateHUD() {
+  const pct = (totalDug / ((ROWS - SURFACE) * COLS) * 100).toFixed(1);
+  document.getElementById('sAnts').textContent = ants.length;
+  document.getElementById('sTunnel').textContent = pct + '%';
+  document.getElementById('sChambers').textContent = chambers.length;
+  document.getElementById('sDug').textContent = totalDug;
+  document.getElementById('sDay').textContent = simDay;
+}
+
+function dropAnts(n) {
+  for (let i = 0; i < n; i++)
+    ants.push(new Ant(Math.random() * (INTERNAL_W - 60) + 30, (SURFACE - 1) * CELL));
+  toast(n + ' ant' + (n > 1 ? 's' : '') + ' released');
+}
+
+function dropFood() {
+  foods.push({ x: Math.random()*(INTERNAL_W-40)+20, y: SURFACE_PX - CELL, amount: 4+(Math.random()*5)|0 });
+  toast('Food placed');
+}
+
+function cycleSpeed() {
+  const s = [1, 2, 4, 8];
+  speed = s[(s.indexOf(speed) + 1) % s.length];
+  document.getElementById('speedLabel').textContent = speed + 'x';
+  toast('Speed: ' + speed + 'x');
+}
+
+function togglePause() {
+  paused = !paused;
+  document.getElementById('pauseBtn').innerHTML = paused ? '&#9654; play' : '&#10074;&#10074; pause';
+  toast(paused ? 'Paused' : 'Resumed');
+}
+
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('show');
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove('show'), 1800);
+}
+
+// Canvas click
+canvas.addEventListener('click', e => {
+  const rect = canvas.getBoundingClientRect();
+  const sx = INTERNAL_W / rect.width, sy = INTERNAL_H / rect.height;
+  const x = (e.clientX - rect.left) * sx, y = (e.clientY - rect.top) * sy;
+  const gx = (x / CELL) | 0, gy = (y / CELL) | 0;
+  if (gy <= SURFACE + 1) {
+    ants.push(new Ant(x, Math.min(y, SURFACE_PX - 2)));
+    toast('Ant dropped');
+  } else {
+    const r = 3;
+    for (let dy = -r; dy <= r; dy++)
+      for (let dx = -r; dx <= r; dx++)
+        if (dx*dx+dy*dy <= r*r) dig(gx+dx, gy+dy);
+    spawnDirt(x, y);
+  }
+});
+
+// ── Start ──
+function begin() {
+  document.getElementById('intro').classList.add('hide');
+  setTimeout(() => {
+    document.getElementById('intro').style.display = 'none';
+    document.getElementById('app').classList.add('show');
+    resize();
+    initTerrain();
+    dropAnts(8);
+    running = true;
+    tick();
+  }, 500);
+}
+
+function resize() {
+  const wrap = document.getElementById('wrap');
+  const w = wrap.clientWidth;
+  const h = wrap.clientHeight;
+  // Use a resolution that fills the viewport while maintaining aspect ratio
+  const aspect = INTERNAL_W / INTERNAL_H;
+  const wrapAspect = w / h;
+  if (wrapAspect > aspect) {
+    canvas.style.height = '100%';
+    canvas.style.width = (h * aspect) + 'px';
+    canvas.style.left = ((w - h * aspect) / 2) + 'px';
+    canvas.style.top = '0';
+  } else {
+    canvas.style.width = '100%';
+    canvas.style.height = (w / aspect) + 'px';
+    canvas.style.left = '0';
+    canvas.style.top = ((h - w / aspect) / 2) + 'px';
+  }
+  canvas.width = INTERNAL_W;
+  canvas.height = INTERNAL_H;
+}
+
+window.addEventListener('resize', () => { if (running) resize(); });
+</script>
+
+</body>
+</html>
