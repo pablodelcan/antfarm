@@ -222,6 +222,7 @@ let foods = [];
 let chambers = [];
 let particles = [];
 let terrainParticles = [];     // Particles from terrain diff (dug/deposited)
+let fallingObjects = [];       // Client-side falling animation (ants/food dropping in)
 let frame = 0, totalDug = 0, simDay = 1;
 let running = false;
 let hoveredAnt = null, mouseX = 0, mouseY = 0;
@@ -590,6 +591,23 @@ function tickParticles() {
     p.vy += 0.08; p.vx *= 0.96;
     if (--p.life <= 0) terrainParticles.splice(i, 1);
   }
+  // Falling objects (visual-only drop-in animation)
+  for (let i = fallingObjects.length - 1; i >= 0; i--) {
+    const f = fallingObjects[i];
+    f.vy += 0.25; // gravity
+    f.y += f.vy;
+    f.x += f.vx;
+    f.vx *= 0.99;
+    f.rotation += f.rotSpeed;
+    // Bounce off surface
+    if (f.y > SURFACE_PX - 5) {
+      f.y = SURFACE_PX - 5;
+      f.vy *= -0.3;
+      if (Math.abs(f.vy) < 0.5) {
+        fallingObjects.splice(i, 1);
+      }
+    }
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -729,61 +747,74 @@ function renderFrame() {
 function renderSilhouette() {
   const y = SURFACE_PX, left = FRAME, right = W - FRAME;
   ctx.save(); ctx.fillStyle = '#2a8a38';
-  ctx.fillRect(left, y - 2, right - left, 4);
+
+  // Ground line with gentle hills
+  ctx.fillRect(left, y - 1, right - left, 3);
   ctx.beginPath(); ctx.moveTo(left, y);
   for (let x = left; x <= right; x++) {
-    const hill = Math.sin((x - left) * 0.008) * 6 + Math.sin((x - left) * 0.02) * 3;
+    const hill = Math.sin((x - left) * 0.006) * 5 + Math.sin((x - left) * 0.018) * 2;
     ctx.lineTo(x, y - hill - 2);
   }
   ctx.lineTo(right, y); ctx.closePath(); ctx.fill();
 
-  // Barn
-  let bx = left + 80;
-  ctx.fillRect(bx, y - 30, 35, 28);
-  ctx.beginPath(); ctx.moveTo(bx - 3, y - 30); ctx.lineTo(bx + 17, y - 46); ctx.lineTo(bx + 38, y - 30); ctx.closePath(); ctx.fill();
-  ctx.fillStyle = '#1e6b2b'; ctx.fillRect(bx + 12, y - 16, 10, 14); ctx.fillStyle = '#2a8a38';
-
-  // House
-  bx = left + 160;
-  ctx.fillRect(bx, y - 25, 28, 23);
-  ctx.beginPath(); ctx.moveTo(bx - 2, y - 25); ctx.lineTo(bx + 14, y - 38); ctx.lineTo(bx + 30, y - 25); ctx.closePath(); ctx.fill();
-  ctx.fillRect(bx + 22, y - 42, 5, 16);
-  ctx.fillStyle = '#1e6b2b'; ctx.fillRect(bx + 8, y - 20, 6, 6); ctx.fillRect(bx + 17, y - 20, 6, 6); ctx.fillStyle = '#2a8a38';
-
-  // Windmill
-  const wmX = right - 200;
-  ctx.fillRect(wmX, y - 40, 6, 38);
-  ctx.save(); ctx.translate(wmX + 3, y - 40); ctx.rotate(renderFrame_counter * 0.008);
-  for (let i = 0; i < 4; i++) { ctx.rotate(Math.PI / 2); ctx.fillRect(-2, 0, 4, 18); }
-  ctx.restore();
-
-  // Silo
-  const sx = right - 120;
-  ctx.fillRect(sx, y - 38, 16, 36);
-  ctx.beginPath(); ctx.arc(sx + 8, y - 38, 8, Math.PI, 0); ctx.fill();
-  ctx.beginPath(); ctx.moveTo(sx + 5, y - 44); ctx.lineTo(sx + 8, y - 52); ctx.lineTo(sx + 11, y - 44); ctx.closePath(); ctx.fill();
-
-  // Big barn
-  bx = right - 80;
-  ctx.fillRect(bx, y - 32, 40, 30);
-  ctx.beginPath(); ctx.moveTo(bx - 3, y - 32); ctx.lineTo(bx + 20, y - 48); ctx.lineTo(bx + 43, y - 32); ctx.closePath(); ctx.fill();
-  ctx.fillStyle = '#1e6b2b'; ctx.beginPath(); ctx.arc(bx + 20, y - 36, 5, Math.PI, 0); ctx.fill(); ctx.fillStyle = '#2a8a38';
-
-  // Trees
-  for (const tx of [left + 30, left + 250, left + 350, right - 260, right - 160]) {
-    ctx.fillRect(tx, y - 18, 3, 16); ctx.beginPath(); ctx.arc(tx + 1.5, y - 22, 9, 0, 6.28); ctx.fill();
+  // Just a few trees — simple, sparse
+  for (const tx of [left + 60, left + 280, right - 230, right - 80]) {
+    ctx.fillRect(tx, y - 16, 2.5, 14);
+    ctx.beginPath(); ctx.arc(tx + 1.2, y - 19, 7, 0, 6.28); ctx.fill();
   }
-  // Fence
-  for (let fx = left + 300; fx < left + 420; fx += 15) ctx.fillRect(fx, y - 10, 2, 8);
-  ctx.fillRect(left + 300, y - 8, 120, 1.5); ctx.fillRect(left + 300, y - 5, 120, 1.5);
+
+  // Simple grass tufts
+  ctx.fillStyle = '#1e6b2b';
+  for (let gx = left + 20; gx < right - 20; gx += 35 + Math.sin(gx * 0.1) * 15) {
+    ctx.fillRect(gx, y - 4, 1.5, 4);
+    ctx.fillRect(gx + 3, y - 5, 1.5, 5);
+    ctx.fillRect(gx + 6, y - 3, 1.5, 3);
+  }
+
   ctx.restore();
 }
 
 function renderFood() {
   for (const f of foods) {
-    const p = 1 + Math.sin(renderFrame_counter * 0.05) * 0.12, r = 3 + f.amount * 0.8;
-    ctx.beginPath(); ctx.arc(f.x, f.y, r * 2 * p, 0, 6.28); ctx.fillStyle = 'rgba(70,170,50,0.06)'; ctx.fill();
-    ctx.beginPath(); ctx.arc(f.x, f.y, r * p, 0, 6.28); ctx.fillStyle = 'rgba(90,190,60,0.85)'; ctx.fill();
+    const amt = f.amount || 3;
+    const baseR = 3 + amt * 0.6;
+    // Scent glow
+    ctx.beginPath(); ctx.arc(f.x, f.y, baseR * 2.5, 0, 6.28);
+    ctx.fillStyle = 'rgba(180,140,60,0.04)'; ctx.fill();
+
+    // Draw as a cluster of crumbs/sugar (what ants actually eat)
+    const seed = (f.x * 137 + f.y * 269) | 0;
+    const crumbCount = Math.min(amt + 2, 8);
+    for (let i = 0; i < crumbCount; i++) {
+      const h = ((seed + i * 7919) * 2654435761) >>> 0;
+      const cx = f.x + ((h & 0xFF) / 255 - 0.5) * baseR * 2;
+      const cy = f.y + (((h >> 8) & 0xFF) / 255 - 0.5) * baseR * 1.5;
+      const cr = 1 + ((h >> 16) & 0x3) * 0.5;
+      const kind = (h >> 20) & 0x3; // 0=sugar, 1=crumb, 2=fruit, 3=seed
+      if (kind === 0) {
+        // Sugar crystal — white/off-white cube
+        ctx.fillStyle = 'rgba(245,240,230,0.9)';
+        ctx.fillRect(cx - cr, cy - cr, cr * 2, cr * 1.8);
+        ctx.fillStyle = 'rgba(255,255,255,0.4)';
+        ctx.fillRect(cx - cr + 0.5, cy - cr + 0.5, cr, cr * 0.6);
+      } else if (kind === 1) {
+        // Bread crumb — warm brown
+        ctx.fillStyle = 'rgba(180,140,80,0.85)';
+        ctx.beginPath(); ctx.arc(cx, cy, cr, 0, 6.28); ctx.fill();
+        ctx.fillStyle = 'rgba(200,165,100,0.4)';
+        ctx.beginPath(); ctx.arc(cx - 0.3, cy - 0.3, cr * 0.5, 0, 6.28); ctx.fill();
+      } else if (kind === 2) {
+        // Fruit bit — reddish/orange
+        ctx.fillStyle = 'rgba(200,80,40,0.85)';
+        ctx.beginPath(); ctx.arc(cx, cy, cr * 1.1, 0, 6.28); ctx.fill();
+        ctx.fillStyle = 'rgba(230,120,60,0.3)';
+        ctx.beginPath(); ctx.arc(cx - 0.3, cy - 0.4, cr * 0.5, 0, 6.28); ctx.fill();
+      } else {
+        // Seed — dark oval
+        ctx.fillStyle = 'rgba(90,60,30,0.8)';
+        ctx.beginPath(); ctx.ellipse(cx, cy, cr * 1.2, cr * 0.6, (h & 0xF) * 0.4, 0, 6.28); ctx.fill();
+      }
+    }
   }
 }
 
@@ -817,136 +848,121 @@ function renderAnt3D(ant) {
   ctx.scale(facingRight, 1);
 
   // Apply body tilt from posture
-  if (posture.bodyTilt) {
-    ctx.rotate(posture.bodyTilt);
-  }
+  if (posture.bodyTilt) ctx.rotate(posture.bodyTilt);
 
-  // Base color — with dusty tint when carrying sand
-  let br = 42 + ant.hue, bg = 20 + ant.hue * 0.3, bb = 12 + ant.hue * 0.2;
-  if (ant.carryingSand > 0) {
-    const dust = Math.min(ant.carryingSand * 3, 15);
-    br += dust; bg += dust * 0.7; bb += dust * 0.35;
-  }
+  // Bold black silhouette style — like the reference icon
+  const col = '#1a1a1a';
 
-  // === LEGS (3 pairs, side view) ===
-  ctx.strokeStyle = `rgb(${br - 8},${bg - 4},${bb - 3})`;
-  ctx.lineWidth = 0.6; ctx.lineCap = 'round';
+  // === LEGS (3 pairs — thick, angular, geometric) ===
+  ctx.strokeStyle = col;
+  ctx.lineWidth = s * 0.22; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
 
   for (let i = 0; i < 3; i++) {
     const tripodOffset = (i === 1) ? Math.PI : 0;
     const phase = (mov || posture.legSpeed > 0) ? Math.sin(ant.legT + tripodOffset) * posture.legSpeed : 0;
-    const attachX = -s * 0.4 + i * s * 0.7;
-    const attachY = s * 0.15;
-    const kneeX = attachX + phase * s * 0.3;
-    const kneeY = attachY + s * 0.7;
-    const footX = kneeX + (i - 1) * s * 0.25 + phase * s * 0.4;
-    const footY = attachY + s * 1.3 + Math.abs(phase) * s * 0.15;
+    const attachX = -s * 0.3 + i * s * 0.65;
+    const attachY = s * 0.1;
+    // Knee goes up then down — angular like reference
+    const kneeX = attachX + phase * s * 0.2;
+    const kneeY = attachY + s * 0.55;
+    const footX = kneeX + (i - 1) * s * 0.15 + phase * s * 0.3;
+    const footY = attachY + s * 1.1 + Math.abs(phase) * s * 0.1;
 
     ctx.beginPath();
     ctx.moveTo(attachX, attachY);
     ctx.lineTo(kneeX, kneeY);
     ctx.lineTo(footX, footY);
     ctx.stroke();
+    // Foot — small flat end
     ctx.beginPath();
-    ctx.moveTo(footX, footY);
-    ctx.lineTo(footX + s * 0.15, footY + s * 0.05);
+    ctx.moveTo(footX - s * 0.1, footY);
+    ctx.lineTo(footX + s * 0.15, footY + s * 0.04);
     ctx.stroke();
   }
 
-  // === ABDOMEN ===
-  const abdX = -s * 1.0, abdY = -s * 0.1;
+  // === ABDOMEN (large oval, solid black) ===
+  const abdX = -s * 0.9, abdY = -s * 0.05;
   const abdPulse = posture.abdomenPulse || 1.0;
-  let g = ctx.createRadialGradient(abdX, abdY - s * 0.2, 0, abdX, abdY, s * 0.9);
-  g.addColorStop(0, `rgb(${br + 25},${bg + 12},${bb + 6})`);
-  g.addColorStop(0.5, `rgb(${br},${bg},${bb})`);
-  g.addColorStop(1, `rgb(${br - 12},${bg - 6},${bb - 4})`);
-  ctx.fillStyle = g;
-  ctx.beginPath(); ctx.ellipse(abdX, abdY, s * 1.0, s * 0.65 * abdPulse, -0.1, 0, 6.28); ctx.fill();
-  ctx.fillStyle = 'rgba(255,255,255,0.1)';
-  ctx.beginPath(); ctx.ellipse(abdX + s * 0.1, abdY - s * 0.25, s * 0.4, s * 0.2, -0.2, 0, 6.28); ctx.fill();
-  ctx.strokeStyle = `rgba(${br - 15},${bg - 8},${bb - 5},0.25)`; ctx.lineWidth = 0.3;
-  for (let i = 0; i < 3; i++) {
-    const sx2 = abdX - s * 0.4 + i * s * 0.35;
-    ctx.beginPath(); ctx.moveTo(sx2, abdY - s * 0.5); ctx.quadraticCurveTo(sx2 + s * 0.05, abdY, sx2, abdY + s * 0.5); ctx.stroke();
-  }
+  ctx.fillStyle = col;
+  ctx.beginPath();
+  ctx.ellipse(abdX, abdY, s * 0.95, s * 0.6 * abdPulse, -0.1, 0, 6.28);
+  ctx.fill();
 
-  // === PETIOLE ===
-  ctx.fillStyle = `rgb(${br - 5},${bg - 3},${bb - 2})`;
-  ctx.beginPath(); ctx.ellipse(-s * 0.1, s * 0.0, s * 0.15, s * 0.12, 0, 0, 6.28); ctx.fill();
+  // === PETIOLE (narrow waist) ===
+  ctx.beginPath();
+  ctx.ellipse(-s * 0.05, 0, s * 0.13, s * 0.1, 0, 0, 6.28);
+  ctx.fill();
 
-  // === THORAX ===
-  const thX = s * 0.35, thY = -s * 0.05;
-  g = ctx.createRadialGradient(thX, thY - s * 0.15, 0, thX, thY, s * 0.5);
-  g.addColorStop(0, `rgb(${br + 20},${bg + 10},${bb + 5})`);
-  g.addColorStop(0.6, `rgb(${br + 3},${bg + 1},${bb})`);
-  g.addColorStop(1, `rgb(${br - 8},${bg - 4},${bb - 3})`);
-  ctx.fillStyle = g;
-  ctx.beginPath(); ctx.ellipse(thX, thY, s * 0.45, s * 0.35, -0.15, 0, 6.28); ctx.fill();
-  ctx.fillStyle = 'rgba(255,255,255,0.08)';
-  ctx.beginPath(); ctx.ellipse(thX, thY - s * 0.15, s * 0.2, s * 0.1, 0, 0, 6.28); ctx.fill();
+  // === THORAX (smaller oval) ===
+  const thX = s * 0.3, thY = -s * 0.03;
+  ctx.beginPath();
+  ctx.ellipse(thX, thY, s * 0.4, s * 0.3, -0.15, 0, 6.28);
+  ctx.fill();
 
-  // === HEAD (with posture head dip) ===
+  // === HEAD (round, slightly pointed forward) ===
   const headDip = posture.headDip || 0;
-  const hdX = s * 0.95, hdY = s * 0.05 + headDip * s;
-  g = ctx.createRadialGradient(hdX, hdY - s * 0.1, 0, hdX, hdY, s * 0.4);
-  g.addColorStop(0, `rgb(${br + 15},${bg + 8},${bb + 4})`);
-  g.addColorStop(0.6, `rgb(${br},${bg},${bb})`);
-  g.addColorStop(1, `rgb(${br - 10},${bg - 5},${bb - 3})`);
-  ctx.fillStyle = g;
-  ctx.beginPath(); ctx.ellipse(hdX, hdY, s * 0.38, s * 0.32, 0.1, 0, 6.28); ctx.fill();
+  const hdX = s * 0.85, hdY = s * 0.02 + headDip * s;
+  ctx.beginPath();
+  ctx.ellipse(hdX, hdY, s * 0.35, s * 0.3, 0.1, 0, 6.28);
+  ctx.fill();
 
-  // Eye
-  ctx.fillStyle = 'rgba(0,0,0,0.7)';
-  ctx.beginPath(); ctx.arc(hdX + s * 0.18, hdY - s * 0.08, s * 0.08, 0, 6.28); ctx.fill();
-  ctx.fillStyle = 'rgba(255,255,255,0.35)';
-  ctx.beginPath(); ctx.arc(hdX + s * 0.2, hdY - s * 0.1, s * 0.03, 0, 6.28); ctx.fill();
+  // Eye (small white dot)
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  ctx.arc(hdX + s * 0.14, hdY - s * 0.06, s * 0.06, 0, 6.28);
+  ctx.fill();
 
-  // === MANDIBLES (with posture control) ===
-  ctx.strokeStyle = `rgb(${br - 8},${bg - 4},${bb - 3})`; ctx.lineWidth = 0.7; ctx.lineCap = 'round';
+  // === MANDIBLES (bold, angular — key feature of reference) ===
+  ctx.strokeStyle = col; ctx.lineWidth = s * 0.18; ctx.lineCap = 'round';
   const mO = posture.mandibleOpen + (mov ? Math.sin(ant.legT * 0.5) * 0.04 : 0);
-  ctx.beginPath(); ctx.moveTo(hdX + s * 0.3, hdY - s * 0.05);
-  ctx.quadraticCurveTo(hdX + s * 0.55, hdY - s * 0.15 - mO * s, hdX + s * 0.6, hdY - s * 0.02 - mO * s); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(hdX + s * 0.3, hdY + s * 0.1);
-  ctx.quadraticCurveTo(hdX + s * 0.55, hdY + s * 0.2 + mO * s, hdX + s * 0.6, hdY + s * 0.08 + mO * s); ctx.stroke();
+  // Top mandible
+  ctx.beginPath();
+  ctx.moveTo(hdX + s * 0.25, hdY - s * 0.08);
+  ctx.lineTo(hdX + s * 0.6, hdY - s * 0.2 - mO * s * 0.8);
+  ctx.stroke();
+  // Bottom mandible
+  ctx.beginPath();
+  ctx.moveTo(hdX + s * 0.25, hdY + s * 0.08);
+  ctx.lineTo(hdX + s * 0.6, hdY + s * 0.2 + mO * s * 0.8);
+  ctx.stroke();
 
-  // === Sand grain in mandibles (scaled by amount) ===
+  // === Sand grain in mandibles ===
   if (ant.carryingSand > 0) {
-    const grainSize = s * (0.15 + ant.carryingSand * 0.04);
+    const grainSize = s * (0.18 + ant.carryingSand * 0.04);
     ctx.fillStyle = `rgb(${SAND_R},${SAND_G},${SAND_B})`;
-    ctx.beginPath(); ctx.arc(hdX + s * 0.55, hdY + s * 0.03, grainSize, 0, 6.28); ctx.fill();
-    ctx.fillStyle = `rgba(${SAND_R + 15},${SAND_G + 10},${SAND_B + 5},0.5)`;
-    ctx.beginPath(); ctx.arc(hdX + s * 0.52, hdY - s * 0.02, grainSize * 0.4, 0, 6.28); ctx.fill();
+    ctx.beginPath(); ctx.arc(hdX + s * 0.5, hdY, grainSize, 0, 6.28); ctx.fill();
   }
 
-  // === ANTENNA (with posture speed) ===
-  ctx.lineWidth = 0.5; ctx.strokeStyle = `rgb(${br - 5},${bg - 3},${bb - 2})`;
-  const antBob = Math.sin(ant.antT) * 0.15;
-  const antExt = ant.antennateTimer > 0 ? 0.25 : 0;
-  ctx.beginPath(); ctx.moveTo(hdX + s * 0.2, hdY - s * 0.2);
-  ctx.quadraticCurveTo(hdX + s * 0.5, hdY - s * 0.7 + antBob * s,
-    hdX + s * (0.8 + antExt), hdY - s * (0.8 - antExt * 0.3) + antBob * s);
+  // === ANTENNA (bold, angled — one visible in side view) ===
+  ctx.strokeStyle = col; ctx.lineWidth = s * 0.12;
+  const antBob = Math.sin(ant.antT) * 0.12;
+  ctx.beginPath();
+  ctx.moveTo(hdX + s * 0.15, hdY - s * 0.2);
+  ctx.quadraticCurveTo(hdX + s * 0.35, hdY - s * 0.65 + antBob * s,
+    hdX + s * 0.65, hdY - s * 0.75 + antBob * s);
   ctx.stroke();
-  ctx.fillStyle = `rgb(${br + 5},${bg + 3},${bb + 2})`;
-  ctx.beginPath(); ctx.arc(hdX + s * (0.8 + antExt), hdY - s * (0.8 - antExt * 0.3) + antBob * s, s * 0.06, 0, 6.28); ctx.fill();
+  // Antenna tip ball
+  ctx.fillStyle = col;
+  ctx.beginPath();
+  ctx.arc(hdX + s * 0.65, hdY - s * 0.75 + antBob * s, s * 0.06, 0, 6.28);
+  ctx.fill();
 
   // Carrying food
   if (ant.carrying) {
-    ctx.fillStyle = 'rgba(80,180,50,0.9)';
-    ctx.beginPath(); ctx.arc(hdX + s * 0.5, hdY, s * 0.3, 0, 6.28); ctx.fill();
-    ctx.fillStyle = 'rgba(120,220,80,0.4)';
-    ctx.beginPath(); ctx.arc(hdX + s * 0.45, hdY - s * 0.08, s * 0.12, 0, 6.28); ctx.fill();
+    ctx.fillStyle = '#78b840';
+    ctx.beginPath(); ctx.arc(hdX + s * 0.45, hdY - s * 0.05, s * 0.25, 0, 6.28); ctx.fill();
   }
 
-  // Queen marker
+  // Queen marker (subtle golden crown dot)
   if (ant.isQueen) {
-    ctx.fillStyle = 'rgba(255,200,50,0.5)';
-    ctx.beginPath(); ctx.arc(abdX, abdY - s * 0.75, s * 0.2, 0, 6.28); ctx.fill();
+    ctx.fillStyle = 'rgba(255,200,50,0.6)';
+    ctx.beginPath(); ctx.arc(thX, thY - s * 0.5, s * 0.15, 0, 6.28); ctx.fill();
   }
 
   // Hover highlight
   if (hoveredAnt === ant) {
-    ctx.strokeStyle = 'rgba(255,255,255,0.4)'; ctx.lineWidth = 0.8;
-    ctx.beginPath(); ctx.ellipse(0, 0, s * 2.5, s * 1.8, 0, 0, 6.28); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.ellipse(0, 0, s * 2.2, s * 1.5, 0, 0, 6.28); ctx.stroke();
   }
 
   // Digging dust particles
@@ -992,6 +1008,37 @@ function renderGlass() {
   ctx.fillStyle = '#fff'; ctx.fillRect(-15, 0, 30, H * 1.5); ctx.restore();
 }
 
+function renderFallingObjects() {
+  for (const f of fallingObjects) {
+    ctx.save();
+    ctx.translate(f.x, f.y);
+    ctx.rotate(f.rotation);
+    if (f.type === 'ant') {
+      // Simple falling ant silhouette
+      const s = 3.5;
+      ctx.fillStyle = '#1a1a1a';
+      ctx.beginPath(); ctx.ellipse(-s * 0.9, 0, s * 0.9, s * 0.55, 0, 0, 6.28); ctx.fill(); // abdomen
+      ctx.beginPath(); ctx.ellipse(0, 0, s * 0.12, s * 0.1, 0, 0, 6.28); ctx.fill(); // petiole
+      ctx.beginPath(); ctx.ellipse(s * 0.3, 0, s * 0.35, s * 0.28, 0, 0, 6.28); ctx.fill(); // thorax
+      ctx.beginPath(); ctx.ellipse(s * 0.75, 0, s * 0.3, s * 0.25, 0, 0, 6.28); ctx.fill(); // head
+      // Legs splayed out (falling pose)
+      ctx.strokeStyle = '#1a1a1a'; ctx.lineWidth = s * 0.18;
+      for (let i = 0; i < 3; i++) {
+        const lx = -s * 0.3 + i * s * 0.5;
+        ctx.beginPath(); ctx.moveTo(lx, 0); ctx.lineTo(lx - s * 0.4, s * 0.8); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(lx, 0); ctx.lineTo(lx + s * 0.3, -s * 0.7); ctx.stroke();
+      }
+    } else if (f.type === 'food') {
+      // Falling food crumb
+      ctx.fillStyle = f.color || '#b48c50';
+      ctx.beginPath(); ctx.arc(0, 0, 2.5, 0, 6.28); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.3)';
+      ctx.beginPath(); ctx.arc(-0.5, -0.5, 1, 0, 6.28); ctx.fill();
+    }
+    ctx.restore();
+  }
+}
+
 let renderFrame_counter = 0;
 
 function render() {
@@ -1003,6 +1050,7 @@ function render() {
   renderParticles();
   renderTandemLines();
   for (const ant of ants) renderAnt3D(ant);
+  renderFallingObjects();
   renderFrame();
   renderGlass();
 }
@@ -1054,6 +1102,35 @@ document.addEventListener('keyup', e => {
 });
 
 async function adminAction(action, value) {
+  // Immediate visual feedback — spawn falling objects on client
+  if (action === 'addAnts') {
+    for (let i = 0; i < 5; i++) {
+      fallingObjects.push({
+        type: 'ant',
+        x: W * 0.3 + Math.random() * W * 0.4,
+        y: FRAME + 5,
+        vx: (Math.random() - 0.5) * 2,
+        vy: Math.random() * 2,
+        rotation: (Math.random() - 0.5) * 1.5,
+        rotSpeed: (Math.random() - 0.5) * 0.15,
+      });
+    }
+  } else if (action === 'dropFood') {
+    const colors = ['#b48c50', '#e8d8b0', '#c85028', '#5a3c1e'];
+    for (let i = 0; i < 6; i++) {
+      fallingObjects.push({
+        type: 'food',
+        x: W * 0.35 + Math.random() * W * 0.3,
+        y: FRAME + 5,
+        vx: (Math.random() - 0.5) * 3,
+        vy: Math.random() * 1.5,
+        rotation: 0,
+        rotSpeed: (Math.random() - 0.5) * 0.2,
+        color: colors[(Math.random() * colors.length) | 0],
+      });
+    }
+  }
+
   try {
     const res = await fetch('/api/admin', {
       method: 'POST',
@@ -1062,7 +1139,7 @@ async function adminAction(action, value) {
     });
     const data = await res.json();
     if (data.ok) {
-      toast(data.message || 'Action: ' + action);
+      toast(data.message || 'Done');
       if (action === 'setSpeed') {
         document.getElementById('speedVal').textContent = value + 'x';
       }
