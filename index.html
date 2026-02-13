@@ -57,34 +57,72 @@
   .ant-tooltip .tt-val { color: #1a1a1a; font-weight: 500; }
   .bottombar {
     display: flex; align-items: center; justify-content: center; gap: 1px;
-    height: 40px; flex-shrink: 0; border-top: 1px solid #eee; background: #fff;
+    height: 32px; flex-shrink: 0; border-top: 1px solid #eee; background: #fff;
   }
   .bottombar .status {
-    font-size: 0.68rem; color: #aaa; letter-spacing: 0.04em;
-    padding: 0 20px; display: flex; align-items: center; gap: 8px;
+    font-size: 0.62rem; color: #bbb; letter-spacing: 0.04em;
+    padding: 0 20px; display: flex; align-items: center; gap: 6px;
   }
   .bottombar .status .dot {
-    width: 6px; height: 6px; border-radius: 50%; background: #4ade80;
+    width: 5px; height: 5px; border-radius: 50%; background: #4ade80;
     animation: pulse 2s infinite;
   }
   @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
   .toast {
-    position: fixed; bottom: 56px; left: 50%; transform: translateX(-50%) translateY(8px);
+    position: fixed; bottom: 48px; left: 50%; transform: translateX(-50%) translateY(8px);
     background: #1a1a1a; color: #fff; padding: 8px 20px; font-size: 0.72rem;
     opacity: 0; transition: all 0.25s ease; z-index: 90; pointer-events: none;
   }
   .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
-  .ai-thought {
-    position: fixed; bottom: 56px; right: 24px;
-    background: rgba(255,255,255,0.95); backdrop-filter: blur(8px);
-    border: 1px solid #e0e0e0; padding: 10px 16px;
-    font-size: 0.72rem; line-height: 1.5; color: #555;
-    z-index: 90; opacity: 0; transition: all 0.6s ease; max-width: 320px;
-    pointer-events: none;
+
+  /* ── AI Intelligence Panel ── */
+  .ai-panel {
+    position: fixed; top: 58px; right: 12px;
+    background: rgba(255,255,255,0.92); backdrop-filter: blur(10px);
+    border: 1px solid #e8e4de; padding: 12px 16px;
+    font-size: 0.68rem; line-height: 1.5; color: #888;
+    z-index: 45; opacity: 0; transition: opacity 0.6s ease;
+    max-width: 280px; pointer-events: none;
   }
-  .ai-thought.show { opacity: 1; }
-  .ai-thought .ai-label { color: #aaa; font-size: 0.6rem; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 4px; }
-  .ai-thought .ai-text { color: #444; font-family: 'EB Garamond', serif; font-size: 0.85rem; font-style: italic; line-height: 1.5; }
+  .ai-panel.show { opacity: 1; pointer-events: auto; }
+  .ai-panel .ai-label {
+    color: #bbb; font-size: 0.55rem; letter-spacing: 0.1em;
+    text-transform: uppercase; margin-bottom: 6px;
+  }
+  .ai-panel .ai-focus {
+    color: #1a1a1a; font-size: 0.72rem; font-weight: 500; margin-bottom: 4px;
+  }
+  .ai-panel .ai-roles {
+    color: #999; font-size: 0.62rem; font-variant-numeric: tabular-nums;
+    margin-bottom: 6px; letter-spacing: 0.02em;
+  }
+  .ai-panel .ai-narration {
+    color: #555; font-family: 'EB Garamond', serif;
+    font-size: 0.82rem; font-style: italic; line-height: 1.5;
+  }
+
+  /* ── Hidden Admin Panel ── */
+  .admin-panel {
+    position: fixed; bottom: 44px; left: 50%; transform: translateX(-50%);
+    background: rgba(20,20,20,0.95); backdrop-filter: blur(10px);
+    border: 1px solid #333; padding: 12px 20px;
+    display: none; align-items: center; gap: 16px;
+    z-index: 80; border-radius: 6px;
+  }
+  .admin-panel.show { display: flex; }
+  .admin-panel button {
+    background: #333; color: #ddd; border: 1px solid #555;
+    font-family: 'Inter', sans-serif; font-size: 0.65rem;
+    padding: 6px 14px; cursor: pointer; transition: all 0.2s;
+    letter-spacing: 0.04em; text-transform: uppercase;
+  }
+  .admin-panel button:hover { background: #555; color: #fff; }
+  .admin-panel .speed-ctrl {
+    display: flex; align-items: center; gap: 8px; color: #aaa; font-size: 0.62rem;
+  }
+  .admin-panel input[type="range"] {
+    width: 80px; accent-color: #4ade80;
+  }
 </style>
 </head>
 <body>
@@ -112,7 +150,7 @@
   <div class="bottombar">
     <div class="status">
       <span class="dot"></span>
-      <span id="statusText">Connecting to colony...</span>
+      <span id="statusText">Connecting...</span>
     </div>
   </div>
 </div>
@@ -121,19 +159,34 @@
   <div class="tt-name" id="ttName"></div>
   <div class="tt-row"><span>State</span><span class="tt-val" id="ttState"></span></div>
   <div class="tt-row"><span>Energy</span><span class="tt-val" id="ttEnergy"></span></div>
-  <div class="tt-row"><span>Age</span><span class="tt-val" id="ttAge"></span></div>
   <div class="tt-row"><span>Role</span><span class="tt-val" id="ttRole"></span></div>
   <div class="tt-row"><span>Thought</span><span class="tt-val" id="ttThought"></span></div>
 </div>
 <div class="toast" id="toast"></div>
-<div class="ai-thought" id="aiThought">
+
+<!-- Intelligence Panel -->
+<div class="ai-panel" id="aiPanel">
   <div class="ai-label">Colony Intelligence</div>
-  <div class="ai-text" id="aiText"></div>
+  <div class="ai-focus" id="aiFocus">—</div>
+  <div class="ai-roles" id="aiRoles">—</div>
+  <div class="ai-narration" id="aiNarration"></div>
+</div>
+
+<!-- Hidden Admin Panel (j+k+l) -->
+<div class="admin-panel" id="adminPanel">
+  <button onclick="adminAction('addAnts')">+5 Ants</button>
+  <button onclick="adminAction('dropFood')">Drop Food</button>
+  <button id="pauseBtn" onclick="adminAction('togglePause')">Pause</button>
+  <div class="speed-ctrl">
+    <span>Speed</span>
+    <input type="range" id="speedSlider" min="1" max="5" value="1" oninput="adminAction('setSpeed', this.value)">
+    <span id="speedVal">1x</span>
+  </div>
 </div>
 
 <script>
 // ═══════════════════════════════════════════════════════════════════
-//  ANTFARM — Viewer Client
+//  ANTFARM v9 — Viewer Client
 //  Fetches colony state from /api/state every 3 seconds
 //  Renders ants + terrain with smooth interpolation
 //  All simulation runs server-side — this is purely a renderer
@@ -160,23 +213,27 @@ const ST_NAMES = [
 ];
 
 // ── Viewer State ──
-let grid = null;          // Uint8Array from server
-let ants = [];            // Current ant positions (interpolated)
-let antsTarget = [];      // Target ant positions (from latest server state)
-let antsPrev = [];        // Previous ant positions (for interpolation)
+let grid = null;
+let prevGrid = null;          // Previous grid for terrain diff particles
+let ants = [];
+let antsTarget = [];
+let antsPrev = [];
 let foods = [];
 let chambers = [];
 let particles = [];
+let terrainParticles = [];     // Particles from terrain diff (dug/deposited)
 let frame = 0, totalDug = 0, simDay = 1;
 let running = false;
 let hoveredAnt = null, mouseX = 0, mouseY = 0;
 let terrainDirty = true;
 let lastNarration = '';
-let narrationTimeout = null;
 let lastFetchTime = 0;
-let interpolateT = 0;     // 0-1, how far between prev and target state
-const POLL_INTERVAL = 3000; // Fetch every 3 seconds
-const INTERP_SPEED = 1.0 / (POLL_INTERVAL / 16.67); // reach target in one poll interval
+let interpolateT = 0;
+let currentDirective = null;
+let currentRoleCounts = null;
+const POLL_INTERVAL = 3000;
+const INTERP_SPEED = 1.0 / (POLL_INTERVAL / 16.67);
+const MAX_TERRAIN_PARTICLES = 500;
 
 // ── Offscreen terrain canvas ──
 const tOff = document.createElement('canvas');
@@ -184,8 +241,15 @@ tOff.width = W; tOff.height = H;
 const tCtx = tOff.getContext('2d');
 let terrainImageData;
 
+// ── Pixel noise hash (fast deterministic) ──
+function pixelHash(x, y) {
+  let h = (x * 374761393 + y * 668265263 + 1013904223) | 0;
+  h = (h ^ (h >> 13)) * 1274126177;
+  return ((h ^ (h >> 16)) & 0xFF) / 255;
+}
+
 // ═══════════════════════════════════════════════════════════════════
-//  BASE64 DECODE — match server encoding
+//  BASE64 DECODE
 // ═══════════════════════════════════════════════════════════════════
 
 function base64ToUint8(b64) {
@@ -206,17 +270,21 @@ async function fetchState() {
     const data = await res.json();
 
     if (data.status === 'initializing') {
-      document.getElementById('statusText').textContent = 'Colony initializing...';
+      document.getElementById('statusText').textContent = 'Initializing...';
       return;
     }
 
-    // Decode grid from base64
+    // Decode grid and track terrain changes
     if (data.grid && typeof data.grid === 'string') {
-      grid = base64ToUint8(data.grid);
+      const newGrid = base64ToUint8(data.grid);
+      if (grid) {
+        prevGrid = grid;
+        spawnTerrainDiffParticles(prevGrid, newGrid);
+      }
+      grid = newGrid;
       terrainDirty = true;
     }
 
-    // Update state
     totalDug = data.totalDug || 0;
     simDay = data.simDay || 1;
     frame = data.frame || 0;
@@ -226,7 +294,6 @@ async function fetchState() {
     // Save previous ant positions for interpolation
     antsPrev = ants.map(a => ({ ...a }));
 
-    // Update target ant positions
     antsTarget = (data.ants || []).map(a => ({
       id: a.id,
       x: a.x, y: a.y,
@@ -247,37 +314,41 @@ async function fetchState() {
       energy: a.energy,
       age: a.age || 0,
       lastThought: a.lastThought || '',
-      tandemTargetId: a.tandemTargetId
+      tandemTargetId: a.tandemTargetId,
+      heading: a.heading || 0
     }));
 
-    // Match previous ants to new ants by ID for smooth interpolation
     if (antsPrev.length === 0) {
-      // First load — no interpolation needed
       ants = antsTarget.map(a => ({ ...a }));
     } else {
-      // Map old ants by ID
       const prevMap = {};
       for (const a of antsPrev) prevMap[a.id] = a;
-
       ants = antsTarget.map(a => {
         const prev = prevMap[a.id];
         if (prev) {
-          // Keep previous position, will interpolate to target
           return { ...a, x: prev.x, y: prev.y, legT: prev.legT, antT: prev.antT, bodyBob: prev.bodyBob };
         }
-        return { ...a }; // New ant, no interpolation
+        return { ...a };
       });
     }
     interpolateT = 0;
 
-    // Show narration from Claude
-    if (data.narration && data.narration !== lastNarration) {
-      lastNarration = data.narration;
-      showNarration(data.narration);
+    // Intelligence panel data
+    if (data.directive) {
+      currentDirective = data.directive;
+      updateAIPanel(data.directive, data.roleCounts);
+    }
+    if (data.roleCounts) {
+      currentRoleCounts = data.roleCounts;
     }
 
-    // Update status
-    document.getElementById('statusText').textContent = 'Live colony — Day ' + simDay;
+    // Narration
+    if (data.narration && data.narration !== lastNarration) {
+      lastNarration = data.narration;
+      document.getElementById('aiNarration').textContent = data.narration;
+    }
+
+    document.getElementById('statusText').textContent = 'Day ' + simDay;
     lastFetchTime = Date.now();
 
   } catch (err) {
@@ -286,32 +357,103 @@ async function fetchState() {
   }
 }
 
-function showNarration(text) {
-  const el = document.getElementById('aiThought');
-  document.getElementById('aiText').textContent = text;
-  el.classList.add('show');
-  clearTimeout(narrationTimeout);
-  narrationTimeout = setTimeout(() => el.classList.remove('show'), 12000);
+// ═══════════════════════════════════════════════════════════════════
+//  AI INTELLIGENCE PANEL
+// ═══════════════════════════════════════════════════════════════════
+
+const FOCUS_LABELS = {
+  extend_shaft: 'Extending main shaft',
+  extend_gallery: 'Widening galleries',
+  dig_chamber: 'Carving new chamber',
+  forage: 'Foraging for food',
+  rest: 'Colony resting',
+  explore: 'Exploring new paths'
+};
+
+function updateAIPanel(directive, roleCounts) {
+  const panel = document.getElementById('aiPanel');
+  panel.classList.add('show');
+
+  document.getElementById('aiFocus').textContent =
+    FOCUS_LABELS[directive.focus] || directive.focus;
+
+  if (roleCounts) {
+    document.getElementById('aiRoles').textContent =
+      'D:' + roleCounts.digger + '  F:' + roleCounts.forager +
+      '  E:' + roleCounts.explorer + '  I:' + roleCounts.idle;
+  }
+
+  if (directive.narration) {
+    document.getElementById('aiNarration').textContent = directive.narration;
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════
-//  INTERPOLATION — Smooth ant movement between server snapshots
+//  TERRAIN DIFF PARTICLES
+// ═══════════════════════════════════════════════════════════════════
+
+function spawnTerrainDiffParticles(oldGrid, newGrid) {
+  if (terrainParticles.length > MAX_TERRAIN_PARTICLES) return;
+
+  let spawned = 0;
+  for (let gy = SURFACE; gy < ROWS && spawned < 80; gy++) {
+    for (let gx = 0; gx < COLS && spawned < 80; gx++) {
+      const i = gy * COLS + gx;
+      const wassolid = oldGrid[i] > 0;
+      const issolid = newGrid[i] > 0;
+
+      if (wassolid && !issolid && Math.random() < 0.3) {
+        // Cell was dug — spawn falling sand particles
+        const px = gx * CELL + Math.random() * CELL;
+        const py = gy * CELL + Math.random() * CELL;
+        terrainParticles.push({
+          x: px, y: py,
+          vx: (Math.random() - 0.5) * 1.2,
+          vy: Math.random() * -1.5 - 0.5,
+          life: 40 + Math.random() * 30,
+          size: 1.0 + Math.random() * 1.5,
+          r: SAND_R + (Math.random() - 0.5) * 20,
+          g: SAND_G + (Math.random() - 0.5) * 15,
+          b: SAND_B + (Math.random() - 0.5) * 10,
+          type: 'dug'
+        });
+        spawned++;
+      } else if (!wassolid && issolid && Math.random() < 0.2) {
+        // Cell was filled — spawn settling particles
+        const px = gx * CELL + Math.random() * CELL;
+        const py = gy * CELL - 2;
+        terrainParticles.push({
+          x: px, y: py,
+          vx: (Math.random() - 0.5) * 0.5,
+          vy: Math.random() * 0.8 + 0.3,
+          life: 25 + Math.random() * 20,
+          size: 0.8 + Math.random() * 1.0,
+          r: SAND_R - 10,
+          g: SAND_G - 8,
+          b: SAND_B - 5,
+          type: 'deposit'
+        });
+        spawned++;
+      }
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  INTERPOLATION
 // ═══════════════════════════════════════════════════════════════════
 
 function interpolateAnts() {
   interpolateT = Math.min(1, interpolateT + INTERP_SPEED);
-  const t = interpolateT;
 
   for (let i = 0; i < ants.length; i++) {
     const ant = ants[i];
     const target = antsTarget.find(a => a.id === ant.id);
     if (!target) continue;
 
-    // Smooth position interpolation
     ant.x += (target.x - ant.x) * 0.08;
     ant.y += (target.y - ant.y) * 0.08;
 
-    // Copy non-position state directly
     ant.state = target.state;
     ant.role = target.role;
     ant.carrying = target.carrying;
@@ -320,17 +462,105 @@ function interpolateAnts() {
     ant.antennateTimer = target.antennateTimer;
     ant.lastThought = target.lastThought;
     ant.energy = target.energy;
+    ant.heading = target.heading;
 
-    // Animate legs/antenna continuously for visual fidelity
     const moving = Math.hypot(target.vx, target.vy) > 0.08;
-    if (moving) {
-      ant.legT += 0.35;
-      ant.antT += 0.08;
+    const posture = getAntPosture(ant);
+
+    if (moving || posture.animateWhenStill) {
+      ant.legT += 0.35 * posture.legSpeed;
+      ant.antT += 0.08 * posture.antennaSpeed;
       ant.bodyBob = Math.sin(ant.legT * 0.4) * 0.3;
     }
+
+    // Hauling trail particles
+    if (ant.carryingSand > 0 && moving && Math.random() < 0.08) {
+      const behind = ant.vx >= 0 ? -1 : 1;
+      particles.push({
+        x: ant.x + behind * ant.size * 1.5,
+        y: ant.y + ant.size * 0.8,
+        vx: (Math.random() - 0.5) * 0.3,
+        vy: Math.random() * 0.5 + 0.1,
+        life: 20 + Math.random() * 15,
+        size: 0.6 + Math.random() * 0.6,
+        r: SAND_R - 10, g: SAND_G - 8, b: SAND_B - 5
+      });
+    }
+
     ant.vx = target.vx;
     ant.vy = target.vy;
   }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  ANT POSTURE SYSTEM — Visual differences based on activity state
+// ═══════════════════════════════════════════════════════════════════
+
+function getAntPosture(ant) {
+  const s = ant.state;
+  // Digging states: DIG_DOWN=2, DIG_BRANCH=3, DIG_CHAMBER=4, DIG_TO_TARGET=16
+  if (s === 2 || s === 3 || s === 4 || s === 16) {
+    return {
+      bodyTilt: -0.35 - Math.sin(Date.now() * 0.008) * 0.1,    // Tilted downward, rhythmic
+      legSpeed: 1.5,                                              // Faster legs
+      mandibleOpen: 0.25 + Math.sin(Date.now() * 0.012) * 0.15, // Chomping
+      headDip: 0.3,                                               // Head dipping toward ground
+      abdomenPulse: 1.0 + Math.sin(Date.now() * 0.006) * 0.08,  // Slight pulse
+      antennaSpeed: 1.2,
+      animateWhenStill: true,
+      dustChance: 0.15   // Spawn dig dust
+    };
+  }
+  // Hauling sand (11) or Carrying food (8)
+  if (s === 11 || s === 8) {
+    return {
+      bodyTilt: 0.15,          // Leaning back (heavy load)
+      legSpeed: 0.6,           // Slower, labored
+      mandibleOpen: 0,         // Clamped shut
+      headDip: -0.2,           // Head tilted up
+      abdomenPulse: 1.0,
+      antennaSpeed: 0.7,
+      animateWhenStill: false,
+      dustChance: 0
+    };
+  }
+  // Resting (9)
+  if (s === 9) {
+    return {
+      bodyTilt: 0,
+      legSpeed: 0,             // Legs still
+      mandibleOpen: 0,
+      headDip: 0.1,            // Head tucked
+      abdomenPulse: 1.0 + Math.sin(Date.now() * 0.003) * 0.05, // Breathing
+      antennaSpeed: 0.3,       // Very slow antenna
+      animateWhenStill: true,
+      dustChance: 0
+    };
+  }
+  // Exploring (5, 10)
+  if (s === 5 || s === 10) {
+    return {
+      bodyTilt: -0.05,
+      legSpeed: 1.1,
+      mandibleOpen: 0.02,
+      headDip: 0,
+      abdomenPulse: 1.0,
+      antennaSpeed: 2.0,       // Very active antenna
+      animateWhenStill: false,
+      dustChance: 0
+    };
+  }
+  // Default (wander, enter, forage, etc.)
+  return {
+    bodyTilt: 0,
+    legSpeed: 1.0,
+    mandibleOpen: 0,
+    headDip: 0,
+    abdomenPulse: 1.0,
+    antennaSpeed: 1.0,
+    animateWhenStill: false,
+    dustChance: 0
+  };
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -343,19 +573,8 @@ function cellAt(x, y) {
 
 function isSolid(x, y) { return cellAt(x, y) > 0; }
 
-function airFraction(gx, gy) {
-  let air = 0, total = 0;
-  for (let dy = -1; dy <= 1; dy++) {
-    for (let dx = -1; dx <= 1; dx++) {
-      total++;
-      if (!isSolid(gx + dx, gy + dy)) air++;
-    }
-  }
-  return air / total;
-}
-
 // ═══════════════════════════════════════════════════════════════════
-//  PARTICLES — Visual-only decorative particles
+//  PARTICLES
 // ═══════════════════════════════════════════════════════════════════
 
 function tickParticles() {
@@ -364,10 +583,17 @@ function tickParticles() {
     p.x += p.vx; p.y += p.vy; p.vy += 0.06; p.vx *= 0.97;
     if (--p.life <= 0) particles.splice(i, 1);
   }
+  // Terrain diff particles
+  for (let i = terrainParticles.length - 1; i >= 0; i--) {
+    const p = terrainParticles[i];
+    p.x += p.vx; p.y += p.vy;
+    p.vy += 0.08; p.vx *= 0.96;
+    if (--p.life <= 0) terrainParticles.splice(i, 1);
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════
-//  RENDERING — Smooth sand with SDF edges
+//  RENDERING — Smooth sand with pixel noise, depth gradient, strata
 // ═══════════════════════════════════════════════════════════════════
 
 function renderTerrain() {
@@ -378,6 +604,7 @@ function renderTerrain() {
   } else {
     const tImg = tCtx.createImageData(W, H);
     const d = tImg.data;
+    const depthRange = H - SURFACE_PX;
 
     // Sky
     for (let y = 0; y < SURFACE_PX; y++) {
@@ -387,24 +614,79 @@ function renderTerrain() {
       }
     }
 
-    // Ground
+    // Ground — pixel-level rendering with noise, depth, strata, bilinear edges
     for (let py = SURFACE_PX; py < H; py++) {
       const gy = (py / CELL) | 0;
+      const gyFrac = (py / CELL) - gy; // Fractional cell position (for bilinear)
+      const depthFactor = (py - SURFACE_PX) / depthRange; // 0 at surface, 1 at bottom
+
+      // Strata banding — subtle horizontal color shifts
+      const strataShift = Math.sin(py * 0.08) * 4 + Math.sin(py * 0.03) * 6;
+
       for (let px = 0; px < W; px++) {
         const gx = (px / CELL) | 0;
+        const gxFrac = (px / CELL) - gx;
         const i = (py * W + px) * 4;
         const v = cellAt(gx, gy);
 
         if (v > 0) {
-          let r = SAND_R, g = SAND_G, b = SAND_B;
-          const af = airFraction(gx, gy);
-          if (af > 0 && af < 1) {
-            const shadow = af * 0.3;
-            r *= (1 - shadow); g *= (1 - shadow); b *= (1 - shadow);
+          // ── Bilinear edge detection ──
+          // Sample 4 neighboring cells for smooth edges
+          const vR = cellAt(gx + 1, gy);
+          const vB = cellAt(gx, gy + 1);
+          const vRB = cellAt(gx + 1, gy + 1);
+          const nearTunnel = (!vR || !vB || !vRB ||
+            !cellAt(gx - 1, gy) || !cellAt(gx, gy - 1) ||
+            !cellAt(gx - 1, gy - 1) || !cellAt(gx + 1, gy - 1) || !cellAt(gx - 1, gy + 1));
+
+          // Base sand color with depth darkening
+          const darkening = 1 - depthFactor * 0.3;
+          let r = (SAND_R + strataShift) * darkening;
+          let g = (SAND_G + strataShift * 0.6) * darkening;
+          let b = (SAND_B + strataShift * 0.3) * darkening;
+
+          // Pixel noise for texture
+          const noise = (pixelHash(px, py) - 0.5) * 16;
+          r += noise; g += noise * 0.8; b += noise * 0.6;
+
+          // Edge shadow (bilinear smooth)
+          if (nearTunnel) {
+            // Count empty neighbors with distance weighting
+            let shadow = 0, samples = 0;
+            for (let dy = -1; dy <= 1; dy++) {
+              for (let dx = -1; dx <= 1; dx++) {
+                if (dx === 0 && dy === 0) continue;
+                samples++;
+                if (!isSolid(gx + dx, gy + dy)) {
+                  const w = (dx === 0 || dy === 0) ? 1.0 : 0.7; // Cardinal neighbors weighted more
+                  shadow += w;
+                }
+              }
+            }
+            const shadowFactor = shadow / (samples * 0.8);
+            const edgeDarken = shadowFactor * 0.35;
+            r *= (1 - edgeDarken);
+            g *= (1 - edgeDarken);
+            b *= (1 - edgeDarken);
           }
-          d[i] = r | 0; d[i + 1] = g | 0; d[i + 2] = b | 0; d[i + 3] = 255;
+
+          // Cell hardness tint — harder cells slightly more reddish
+          if (v >= 3) {
+            r += (v - 2) * 3;
+            g -= (v - 2) * 1;
+          }
+
+          d[i] = Math.max(0, Math.min(255, r)) | 0;
+          d[i + 1] = Math.max(0, Math.min(255, g)) | 0;
+          d[i + 2] = Math.max(0, Math.min(255, b)) | 0;
+          d[i + 3] = 255;
         } else {
-          d[i] = 10; d[i + 1] = 8; d[i + 2] = 6; d[i + 3] = 255;
+          // Tunnel/air — dark underground
+          const tunnelDepth = depthFactor * 0.15;
+          d[i] = (10 + tunnelDepth * 8) | 0;
+          d[i + 1] = (8 + tunnelDepth * 6) | 0;
+          d[i + 2] = (6 + tunnelDepth * 4) | 0;
+          d[i + 3] = 255;
         }
       }
     }
@@ -414,10 +696,11 @@ function renderTerrain() {
     terrainDirty = false;
   }
 
-  ctx.filter = 'blur(2.5px)';
+  // Reduced blur — the pixel-level rendering already handles edges
+  ctx.filter = 'blur(0.5px)';
   ctx.drawImage(tOff, 0, 0);
   ctx.filter = 'none';
-  ctx.globalAlpha = 0.25;
+  ctx.globalAlpha = 0.4;
   ctx.drawImage(tOff, 0, 0);
   ctx.globalAlpha = 1.0;
 }
@@ -505,24 +788,45 @@ function renderFood() {
 }
 
 function renderParticles() {
+  // Regular particles (hauling trail, etc.)
   for (const p of particles) {
     const a = Math.max(0, p.life / 35);
     ctx.fillStyle = `rgba(${p.r | 0},${p.g | 0},${p.b | 0},${a.toFixed(2)})`;
     ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, 6.28); ctx.fill();
   }
+  // Terrain diff particles (dug / deposited sand)
+  for (const p of terrainParticles) {
+    const a = Math.max(0, p.life / 50);
+    ctx.fillStyle = `rgba(${p.r | 0},${p.g | 0},${p.b | 0},${a.toFixed(2)})`;
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, 6.28); ctx.fill();
+  }
 }
 
-// ── Side-view ant rendering (profile view like looking through glass) ──
+// ═══════════════════════════════════════════════════════════════════
+//  ANT RENDERING — Side-view with state-dependent posture
+// ═══════════════════════════════════════════════════════════════════
+
 function renderAnt3D(ant) {
   const x = ant.x, y = ant.y + (ant.bodyBob || 0), s = ant.size;
   const facingRight = ant.vx >= 0 ? 1 : -1;
   const mov = Math.hypot(ant.vx, ant.vy) > 0.08 && !ant.isPaused;
+  const posture = getAntPosture(ant);
 
   ctx.save();
   ctx.translate(x, y);
   ctx.scale(facingRight, 1);
 
-  const br = 42 + ant.hue, bg = 20 + ant.hue * 0.3, bb = 12 + ant.hue * 0.2;
+  // Apply body tilt from posture
+  if (posture.bodyTilt) {
+    ctx.rotate(posture.bodyTilt);
+  }
+
+  // Base color — with dusty tint when carrying sand
+  let br = 42 + ant.hue, bg = 20 + ant.hue * 0.3, bb = 12 + ant.hue * 0.2;
+  if (ant.carryingSand > 0) {
+    const dust = Math.min(ant.carryingSand * 3, 15);
+    br += dust; bg += dust * 0.7; bb += dust * 0.35;
+  }
 
   // === LEGS (3 pairs, side view) ===
   ctx.strokeStyle = `rgb(${br - 8},${bg - 4},${bb - 3})`;
@@ -530,7 +834,7 @@ function renderAnt3D(ant) {
 
   for (let i = 0; i < 3; i++) {
     const tripodOffset = (i === 1) ? Math.PI : 0;
-    const phase = mov ? Math.sin(ant.legT + tripodOffset) : 0;
+    const phase = (mov || posture.legSpeed > 0) ? Math.sin(ant.legT + tripodOffset) * posture.legSpeed : 0;
     const attachX = -s * 0.4 + i * s * 0.7;
     const attachY = s * 0.15;
     const kneeX = attachX + phase * s * 0.3;
@@ -551,12 +855,13 @@ function renderAnt3D(ant) {
 
   // === ABDOMEN ===
   const abdX = -s * 1.0, abdY = -s * 0.1;
+  const abdPulse = posture.abdomenPulse || 1.0;
   let g = ctx.createRadialGradient(abdX, abdY - s * 0.2, 0, abdX, abdY, s * 0.9);
   g.addColorStop(0, `rgb(${br + 25},${bg + 12},${bb + 6})`);
   g.addColorStop(0.5, `rgb(${br},${bg},${bb})`);
   g.addColorStop(1, `rgb(${br - 12},${bg - 6},${bb - 4})`);
   ctx.fillStyle = g;
-  ctx.beginPath(); ctx.ellipse(abdX, abdY, s * 1.0, s * 0.65, -0.1, 0, 6.28); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(abdX, abdY, s * 1.0, s * 0.65 * abdPulse, -0.1, 0, 6.28); ctx.fill();
   ctx.fillStyle = 'rgba(255,255,255,0.1)';
   ctx.beginPath(); ctx.ellipse(abdX + s * 0.1, abdY - s * 0.25, s * 0.4, s * 0.2, -0.2, 0, 6.28); ctx.fill();
   ctx.strokeStyle = `rgba(${br - 15},${bg - 8},${bb - 5},0.25)`; ctx.lineWidth = 0.3;
@@ -580,8 +885,9 @@ function renderAnt3D(ant) {
   ctx.fillStyle = 'rgba(255,255,255,0.08)';
   ctx.beginPath(); ctx.ellipse(thX, thY - s * 0.15, s * 0.2, s * 0.1, 0, 0, 6.28); ctx.fill();
 
-  // === HEAD ===
-  const hdX = s * 0.95, hdY = s * 0.05;
+  // === HEAD (with posture head dip) ===
+  const headDip = posture.headDip || 0;
+  const hdX = s * 0.95, hdY = s * 0.05 + headDip * s;
   g = ctx.createRadialGradient(hdX, hdY - s * 0.1, 0, hdX, hdY, s * 0.4);
   g.addColorStop(0, `rgb(${br + 15},${bg + 8},${bb + 4})`);
   g.addColorStop(0.6, `rgb(${br},${bg},${bb})`);
@@ -595,23 +901,24 @@ function renderAnt3D(ant) {
   ctx.fillStyle = 'rgba(255,255,255,0.35)';
   ctx.beginPath(); ctx.arc(hdX + s * 0.2, hdY - s * 0.1, s * 0.03, 0, 6.28); ctx.fill();
 
-  // === MANDIBLES ===
+  // === MANDIBLES (with posture control) ===
   ctx.strokeStyle = `rgb(${br - 8},${bg - 4},${bb - 3})`; ctx.lineWidth = 0.7; ctx.lineCap = 'round';
-  const mO = mov ? Math.sin(ant.legT * 0.5) * 0.08 : 0;
+  const mO = posture.mandibleOpen + (mov ? Math.sin(ant.legT * 0.5) * 0.04 : 0);
   ctx.beginPath(); ctx.moveTo(hdX + s * 0.3, hdY - s * 0.05);
   ctx.quadraticCurveTo(hdX + s * 0.55, hdY - s * 0.15 - mO * s, hdX + s * 0.6, hdY - s * 0.02 - mO * s); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(hdX + s * 0.3, hdY + s * 0.1);
   ctx.quadraticCurveTo(hdX + s * 0.55, hdY + s * 0.2 + mO * s, hdX + s * 0.6, hdY + s * 0.08 + mO * s); ctx.stroke();
 
-  // Sand grain in mandibles
+  // === Sand grain in mandibles (scaled by amount) ===
   if (ant.carryingSand > 0) {
+    const grainSize = s * (0.15 + ant.carryingSand * 0.04);
     ctx.fillStyle = `rgb(${SAND_R},${SAND_G},${SAND_B})`;
-    ctx.beginPath(); ctx.arc(hdX + s * 0.55, hdY + s * 0.03, s * 0.18, 0, 6.28); ctx.fill();
-    ctx.fillStyle = `rgba(${SAND_R + 15},${SAND_G + 10},${SAND_B + 5},0.6)`;
-    ctx.beginPath(); ctx.arc(hdX + s * 0.52, hdY - s * 0.02, s * 0.08, 0, 6.28); ctx.fill();
+    ctx.beginPath(); ctx.arc(hdX + s * 0.55, hdY + s * 0.03, grainSize, 0, 6.28); ctx.fill();
+    ctx.fillStyle = `rgba(${SAND_R + 15},${SAND_G + 10},${SAND_B + 5},0.5)`;
+    ctx.beginPath(); ctx.arc(hdX + s * 0.52, hdY - s * 0.02, grainSize * 0.4, 0, 6.28); ctx.fill();
   }
 
-  // === ANTENNA ===
+  // === ANTENNA (with posture speed) ===
   ctx.lineWidth = 0.5; ctx.strokeStyle = `rgb(${br - 5},${bg - 3},${bb - 2})`;
   const antBob = Math.sin(ant.antT) * 0.15;
   const antExt = ant.antennateTimer > 0 ? 0.25 : 0;
@@ -640,6 +947,19 @@ function renderAnt3D(ant) {
   if (hoveredAnt === ant) {
     ctx.strokeStyle = 'rgba(255,255,255,0.4)'; ctx.lineWidth = 0.8;
     ctx.beginPath(); ctx.ellipse(0, 0, s * 2.5, s * 1.8, 0, 0, 6.28); ctx.stroke();
+  }
+
+  // Digging dust particles
+  if (posture.dustChance > 0 && Math.random() < posture.dustChance && mov) {
+    particles.push({
+      x: ant.x + (facingRight * s * 1.5),
+      y: ant.y + s * 0.3,
+      vx: (Math.random() - 0.5) * 1.5 * facingRight,
+      vy: Math.random() * -1.2 - 0.3,
+      life: 15 + Math.random() * 10,
+      size: 0.8 + Math.random() * 0.8,
+      r: SAND_R - 5, g: SAND_G - 5, b: SAND_B - 3
+    });
   }
 
   ctx.restore();
@@ -706,7 +1026,6 @@ function updateTooltip() {
     document.getElementById('ttName').textContent = a.name;
     document.getElementById('ttState').textContent = (ST_NAMES[a.state] || 'Unknown') + (a.isPaused ? ' (paused)' : '');
     document.getElementById('ttEnergy').textContent = Math.round(a.energy);
-    document.getElementById('ttAge').textContent = Math.round((a.age || 0) / 60) + 's';
     document.getElementById('ttRole').textContent = a.role + (a.isQueen ? ' (queen)' : '') + (a.carryingSand > 0 ? ' [hauling]' : '');
     document.getElementById('ttThought').textContent = a.lastThought || '—';
     tooltip.classList.add('show');
@@ -716,17 +1035,53 @@ function updateTooltip() {
 document.addEventListener('mousemove', e => { mouseX = e.clientX; mouseY = e.clientY; updateTooltip(); });
 
 // ═══════════════════════════════════════════════════════════════════
+//  ADMIN PANEL — Hidden, triggered by j+k+l
+// ═══════════════════════════════════════════════════════════════════
+
+const keysDown = new Set();
+let adminVisible = false;
+
+document.addEventListener('keydown', e => {
+  keysDown.add(e.key.toLowerCase());
+  if (keysDown.has('j') && keysDown.has('k') && keysDown.has('l')) {
+    adminVisible = !adminVisible;
+    document.getElementById('adminPanel').classList.toggle('show', adminVisible);
+    keysDown.clear();
+  }
+});
+document.addEventListener('keyup', e => {
+  keysDown.delete(e.key.toLowerCase());
+});
+
+async function adminAction(action, value) {
+  try {
+    const res = await fetch('/api/admin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, value, secret: 'admin' })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      toast(data.message || 'Action: ' + action);
+      if (action === 'setSpeed') {
+        document.getElementById('speedVal').textContent = value + 'x';
+      }
+    } else {
+      toast('Error: ' + (data.error || 'Unknown'));
+    }
+  } catch (err) {
+    toast('Admin error');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
 //  RENDER LOOP
 // ═══════════════════════════════════════════════════════════════════
 
 function tick() {
   renderFrame_counter++;
-
-  // Interpolate ants between server snapshots
   interpolateAnts();
   tickParticles();
-
-  // Re-render
   render();
   updateHUD();
   requestAnimationFrame(tick);
@@ -761,16 +1116,9 @@ async function begin() {
     canvas.width = W; canvas.height = H; resizeCanvas();
 
     running = true;
-
-    // Fetch initial state
     await fetchState();
-
-    // Start render loop
     tick();
-
-    // Start polling server
     setInterval(fetchState, POLL_INTERVAL);
-
     toast('Connected to live colony');
   }, 500);
 }

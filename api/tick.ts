@@ -57,6 +57,41 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       console.log('Created new colony');
     }
 
+    // 1b. Process admin commands from KV queue
+    try {
+      const adminCommands = (await kv.get('colony:admin-commands')) as any[] | null;
+      if (adminCommands && adminCommands.length > 0) {
+        for (const cmd of adminCommands) {
+          switch (cmd.action) {
+            case 'addAnts':
+              simulation.dropAnts(state, 5);
+              console.log('Admin: Added 5 ants');
+              break;
+            case 'dropFood':
+              simulation.dropFood(state);
+              console.log('Admin: Dropped food');
+              break;
+            case 'togglePause':
+              // Pause/unpause all ants
+              for (const ant of state.ants) {
+                ant.isPaused = !ant.isPaused;
+              }
+              console.log('Admin: Toggled pause');
+              break;
+            case 'setSpeed':
+              // Speed multiplier affects ticks per interval
+              // Stored but not changing tick count (would need different approach)
+              console.log('Admin: Speed set to ' + cmd.value);
+              break;
+          }
+        }
+        // Clear processed commands
+        await kv.del('colony:admin-commands');
+      }
+    } catch (adminError) {
+      console.error('Admin command processing error:', adminError);
+    }
+
     // 2. Run simulation ticks
     const tickStart = Date.now();
     let ticksRun = 0;

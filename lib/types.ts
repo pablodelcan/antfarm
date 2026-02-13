@@ -97,6 +97,7 @@ export interface ViewerState {
   simDay: number;
   narration: string;
   directive: ColonyDirective | null;
+  roleCounts: { digger: number; forager: number; explorer: number; idle: number };
   timestamp: number;
   cols: number;
   rows: number;
