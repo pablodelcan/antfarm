@@ -132,23 +132,22 @@
 
 <script>
 // ═══════════════════════════════════════════════════════════════════
-//  ANTFARM v4 — Research-driven realistic colony simulation
+//  ANTFARM v7 — Intelligent colony simulation with structured tunnels
 //
 //  Based on published myrmecology research:
 //  - Speed: harvester ants 1.5-3 cm/s (~3-6 BL/s), 30-50% slower loaded
 //  - Gait: alternating tripod, sinusoidal body oscillation
 //  - Correlated random walk with ±15-20° per step, meandering ~3 BL wavelength
-//  - Movement pauses (strobing): ~43% paused time at 5-7 Hz bursts
 //  - Pheromone trails with exponential decay
 //  - Stigmergy: extend existing tunnels, follow walls
-//  - 20% of colony resting at any moment
 //  - Self-organized role allocation via response thresholds
 //  - Sand displacement: ants carry excavated grains to surface, build mounds
 //  - Tandem running: experienced ants guide naive ones at 25% speed
-//  - AI awareness: periodic situational assessment every ~60s
-//  - Antennation: antenna-touching for communication within 1 body length
-//  - Digging: ~10 grains/min, prefer loose grains, angle of repose ~40°
-//  - Tunnel geometry: piecewise linear segments, 1-2 body widths
+//  - AI awareness: periodic situational assessment every ~10s
+//  - Tunnel intelligence: shared colony tunnel plan with main shaft,
+//    horizontal galleries at regular depth intervals, and chambers
+//  - Ants coordinate: reuse entrances, extend existing tunnels, avoid
+//    creating parallel shafts
 // ═══════════════════════════════════════════════════════════════════
 
 const canvas = document.getElementById('c');
@@ -179,6 +178,160 @@ let frame = 0, totalDug = 0, simDay = 1;
 let speed = 1, paused = false, running = false;
 let hoveredAnt = null, mouseX = 0, mouseY = 0;
 let hasQueen = false;
+
+// ═══════════════════════════════════════════════════════════════════
+//  COLONY TUNNEL PLAN — Shared intelligence for structured tunnels
+//  Real ant farms show: 1-2 main vertical shafts with horizontal
+//  galleries branching off at regular depth intervals, ending in chambers.
+//  This plan coordinates all ants to build this structure.
+// ═══════════════════════════════════════════════════════════════════
+const tunnelPlan = {
+  entrances: [],        // [{gx, depth}] — established entrance columns
+  mainShaftX: -1,       // grid X of the primary main shaft
+  mainShaftX2: -1,      // grid X of secondary shaft (if colony grows)
+  galleries: [],        // [{depth, leftExtent, rightExtent, complete}]
+  digFrontier: [],      // [{gx, gy, type:'shaft'|'gallery'|'chamber', priority}]
+  shaftBottom: 0,       // deepest point of main shaft (grid Y)
+  shaftBottom2: 0,      // deepest point of secondary shaft
+  initialized: false,
+
+  init() {
+    // Place main shaft near center, slightly randomized
+    this.mainShaftX = Math.round(COLS * 0.45 + Math.random() * COLS * 0.1);
+    this.mainShaftX2 = -1;
+    this.entrances = [{ gx: this.mainShaftX, depth: 0 }];
+    this.galleries = [];
+    this.shaftBottom = SURFACE + 2;
+    this.shaftBottom2 = SURFACE;
+    this.initialized = true;
+    this._updateFrontier();
+  },
+
+  // Find the nearest entrance to a given surface position
+  nearestEntrance(gx) {
+    if (this.entrances.length === 0) return null;
+    let best = null, bestDist = Infinity;
+    for (const e of this.entrances) {
+      const d = Math.abs(e.gx - gx);
+      if (d < bestDist) { bestDist = d; best = e; }
+    }
+    return best;
+  },
+
+  // Get the best dig assignment for an ant based on its position
+  getDigAssignment(antGx, antGy) {
+    if (this.digFrontier.length === 0) this._updateFrontier();
+
+    // Find closest frontier point that isn't too crowded
+    let best = null, bestScore = -Infinity;
+    for (const f of this.digFrontier) {
+      const dist = Math.hypot(f.gx - antGx, f.gy - antGy);
+      // Count nearby diggers at this frontier point
+      let crowding = 0;
+      for (const a of ants) {
+        if (a.role === 'digger' && Math.hypot(a.gx() - f.gx, a.gy() - f.gy) < 8) crowding++;
+      }
+      const score = f.priority * 3 - dist * 0.5 - crowding * 8;
+      if (score > bestScore) { bestScore = score; best = f; }
+    }
+    return best;
+  },
+
+  // Update the dig frontier based on current tunnel state
+  _updateFrontier() {
+    this.digFrontier = [];
+    const maxDepthY = ROWS - 8;
+
+    // 1. Main shaft — always extend downward if not at bottom
+    if (this.shaftBottom < maxDepthY) {
+      this.digFrontier.push({
+        gx: this.mainShaftX, gy: this.shaftBottom + 1,
+        type: 'shaft', angle: Math.PI * 0.5, priority: 10
+      });
+    }
+
+    // 2. Secondary shaft (after colony reaches certain size)
+    if (this.mainShaftX2 > 0 && this.shaftBottom2 < maxDepthY) {
+      this.digFrontier.push({
+        gx: this.mainShaftX2, gy: this.shaftBottom2 + 1,
+        type: 'shaft', angle: Math.PI * 0.5, priority: 7
+      });
+    }
+
+    // 3. Horizontal galleries at regular intervals
+    const galleryInterval = Math.round((ROWS - SURFACE) * 0.15); // every ~15% of depth
+    for (let depth = SURFACE + galleryInterval; depth < Math.min(this.shaftBottom, maxDepthY); depth += galleryInterval) {
+      // Check if gallery exists at this depth
+      let gallery = this.galleries.find(g => Math.abs(g.depth - depth) < 3);
+      if (!gallery) {
+        gallery = { depth, leftExtent: this.mainShaftX, rightExtent: this.mainShaftX, complete: false };
+        this.galleries.push(gallery);
+      }
+
+      if (!gallery.complete) {
+        // Extend gallery left
+        if (gallery.leftExtent > 8) {
+          this.digFrontier.push({
+            gx: gallery.leftExtent - 2, gy: depth,
+            type: 'gallery', angle: Math.PI, priority: 6
+          });
+        }
+        // Extend gallery right
+        if (gallery.rightExtent < COLS - 8) {
+          this.digFrontier.push({
+            gx: gallery.rightExtent + 2, gy: depth,
+            type: 'gallery', angle: 0, priority: 6
+          });
+        }
+        // Mark complete if wide enough
+        const width = gallery.rightExtent - gallery.leftExtent;
+        if (width > COLS * 0.4) gallery.complete = true;
+      }
+
+      // 4. Chamber at end of galleries
+      if (gallery.leftExtent < this.mainShaftX - 15) {
+        this.digFrontier.push({
+          gx: gallery.leftExtent - 1, gy: depth,
+          type: 'chamber', angle: Math.PI, priority: 4
+        });
+      }
+      if (gallery.rightExtent > this.mainShaftX + 15) {
+        this.digFrontier.push({
+          gx: gallery.rightExtent + 1, gy: depth,
+          type: 'chamber', angle: 0, priority: 4
+        });
+      }
+    }
+
+    // 5. If secondary shaft needed and colony is big enough
+    if (ants.length > 15 && this.mainShaftX2 < 0) {
+      this.mainShaftX2 = this.mainShaftX + Math.round(COLS * 0.25) * (Math.random() < 0.5 ? 1 : -1);
+      this.mainShaftX2 = Math.max(10, Math.min(COLS - 10, this.mainShaftX2));
+      this.shaftBottom2 = SURFACE + 2;
+      this.entrances.push({ gx: this.mainShaftX2, depth: 0 });
+    }
+  },
+
+  // Called when digging occurs to update shaft/gallery tracking
+  notifyDig(gx, gy) {
+    // Update shaft bottoms
+    if (Math.abs(gx - this.mainShaftX) < 3 && gy > this.shaftBottom) {
+      this.shaftBottom = gy;
+    }
+    if (this.mainShaftX2 > 0 && Math.abs(gx - this.mainShaftX2) < 3 && gy > this.shaftBottom2) {
+      this.shaftBottom2 = gy;
+    }
+    // Update gallery extents
+    for (const gallery of this.galleries) {
+      if (Math.abs(gy - gallery.depth) < 2) {
+        if (gx < gallery.leftExtent) gallery.leftExtent = gx;
+        if (gx > gallery.rightExtent) gallery.rightExtent = gx;
+      }
+    }
+    // Refresh frontier periodically
+    if (frame % 120 === 0) this._updateFrontier();
+  }
+};
 
 // ── Smooth terrain ──
 // Multi-octave Perlin-like noise for natural sand texture
@@ -394,15 +547,16 @@ function detectChambers() {
 //  their environment and make intelligent decisions
 // ═══════════════════════════════════════════════════════════════════
 
-const AI_INTERVAL = 3600; // 60s at 60fps
+const AI_INTERVAL = 600; // 10s at 60fps — much more responsive
 let lastAITick = 0;
 
 function aiAwarenessPass() {
+  // Update tunnel plan frontier
+  if (tunnelPlan.initialized) tunnelPlan._updateFrontier();
+
   // Colony-level assessment
   const diggerCount = ants.filter(a => a.role === 'digger').length;
   const foragerCount = ants.filter(a => a.role === 'forager').length;
-  const explorerCount = ants.filter(a => a.role === 'explorer').length;
-  const idleCount = ants.filter(a => a.role === 'idle').length;
   const totalAnts = ants.length;
   const foodAvail = foods.reduce((s, f) => s + f.amount, 0);
   const tunnelPct = totalDug / ((ROWS - SURFACE) * COLS);
@@ -411,53 +565,76 @@ function aiAwarenessPass() {
   for (const ant of ants) {
     if (ant.isQueen || ant.state === ST.REST) continue;
 
-    // Calculate personal situation assessment
     const gx = ant.gx(), gy = ant.gy();
     const depth = ant.depthR();
     const atSurface = ant.atSurface();
-    const nearbyAnts = ants.filter(a => a !== ant && Math.hypot(a.x - ant.x, a.y - ant.y) < 40).length;
     const nearbyDiggers = ants.filter(a => a !== ant && a.role === 'digger' && Math.hypot(a.x - ant.x, a.y - ant.y) < 40).length;
 
-    // Situational reasoning
     let thought = '';
     let action = null;
 
-    // Too many diggers at my location? Switch to exploring
+    // INTELLIGENCE: Get a dig assignment from the tunnel plan
     if (ant.role === 'digger' && nearbyDiggers > 3) {
-      action = 'explore';
-      thought = 'Too crowded here, I should explore elsewhere';
+      // Too crowded — get a new assignment from the plan
+      const assignment = tunnelPlan.getDigAssignment(gx, gy);
+      if (assignment) {
+        ant.digTargetX = assignment.gx;
+        ant.digTargetY = assignment.gy;
+        ant.digAngle = assignment.angle;
+        ant.assignedType = assignment.type;
+        action = 'reassign';
+        thought = 'Too crowded, moving to extend ' + assignment.type;
+      } else {
+        action = 'explore';
+        thought = 'Too crowded here, exploring new areas';
+      }
     }
-    // Colony needs more diggers?
-    else if (diggerCount < totalAnts * 0.3 && tunnelPct < 0.15 && ant.role === 'idle') {
-      action = 'dig';
-      thought = 'Colony needs more tunnels, I should dig';
+    // Colony needs more diggers
+    else if (diggerCount < totalAnts * 0.4 && tunnelPct < 0.2 && ant.role === 'idle') {
+      const assignment = tunnelPlan.getDigAssignment(gx, gy);
+      if (assignment) {
+        ant.digTargetX = assignment.gx;
+        ant.digTargetY = assignment.gy;
+        ant.digAngle = assignment.angle;
+        ant.assignedType = assignment.type;
+        action = 'dig';
+        thought = 'Colony needs tunnels, assigned to ' + assignment.type;
+      } else {
+        action = 'dig';
+        thought = 'Colony needs more tunnels, I should dig';
+      }
     }
-    // Food is scarce and I'm idle?
+    // Food available
     else if (foodAvail > 0 && foragerCount < 2 && ant.role !== 'forager') {
       action = 'forage';
       thought = 'Food spotted but few foragers, I should help';
     }
-    // Deep underground and tired?
+    // Deep and tired
     else if (depth > 0.6 && ant.energy < 300) {
       action = 'return';
       thought = 'Getting tired this deep, heading back up';
     }
-    // Stuck in a dead end?
+    // Stuck
     else if (ant.stuck > 15) {
       action = 'unstick';
-      thought = 'Stuck in a dead end, need to find another way';
+      thought = 'Stuck in a dead end, finding another way';
     }
-    // Nothing happening nearby and I've been idle?
-    else if (ant.role === 'idle' && ant.patience > 150) {
-      if (tunnelPct < 0.3) {
+    // Idle too long — get a dig assignment
+    else if (ant.role === 'idle' && ant.patience > 100) {
+      const assignment = tunnelPlan.getDigAssignment(gx, gy);
+      if (assignment && tunnelPct < 0.3) {
+        ant.digTargetX = assignment.gx;
+        ant.digTargetY = assignment.gy;
+        ant.digAngle = assignment.angle;
+        ant.assignedType = assignment.type;
         action = 'dig';
-        thought = 'Been idle too long, time to contribute';
+        thought = 'Time to help dig the ' + assignment.type;
       } else {
         action = 'explore';
         thought = 'Curious about what is down there';
       }
     }
-    // Can I teach a nearby naive ant?
+    // Tandem teaching
     else if (ant.experience > 500 && !ant.tandemTarget) {
       const naive = ants.find(a => a !== ant && a.experience < 100 && Math.hypot(a.x - ant.x, a.y - ant.y) < 30 && !a.tandemLeader);
       if (naive) {
@@ -469,10 +646,18 @@ function aiAwarenessPass() {
     }
 
     // Apply the decision
-    if (action === 'dig') {
+    if (action === 'dig' || action === 'reassign') {
       ant.role = 'digger';
-      ant.state = atSurface ? ST.ENTER : ST.DIG_BRANCH;
-      ant.digAngle = Math.PI * 0.5 + (Math.random() - 0.5) * 0.3;
+      if (atSurface) {
+        ant.state = ST.ENTER;
+        const entrance = tunnelPlan.nearestEntrance(gx);
+        ant.targetX = entrance ? entrance.gx * CELL : tunnelPlan.mainShaftX * CELL;
+      } else if (ant.digTargetX && ant.digTargetY) {
+        // Navigate to the assignment
+        ant.state = ST.DIG_TO_TARGET;
+      } else {
+        ant.state = ST.DIG_DOWN;
+      }
     } else if (action === 'explore') {
       ant.role = 'explorer';
       ant.state = ST.EXPLORE;
@@ -513,12 +698,13 @@ function showAIThought(name, text) {
 const ST = {
   WANDER: 0, ENTER: 1, DIG_DOWN: 2, DIG_BRANCH: 3, DIG_CHAMBER: 4,
   EXPLORE: 5, GO_UP: 6, FORAGE: 7, CARRY: 8, REST: 9, WALL_FOLLOW: 10,
-  HAUL_SAND: 11, TANDEM_LEAD: 12, TANDEM_FOLLOW: 13, ANTENNATE: 14, PAUSE: 15
+  HAUL_SAND: 11, TANDEM_LEAD: 12, TANDEM_FOLLOW: 13, ANTENNATE: 14, PAUSE: 15,
+  DIG_TO_TARGET: 16
 };
 const ST_NAMES = [
   'Wandering', 'Entering', 'Digging down', 'Branching', 'Carving chamber',
   'Exploring', 'Returning', 'Foraging', 'Carrying food', 'Resting', 'Wall following',
-  'Hauling sand', 'Leading', 'Following', 'Communicating', 'Pausing'
+  'Hauling sand', 'Leading', 'Following', 'Communicating', 'Pausing', 'Navigating to dig site'
 ];
 
 let nextId = 1;
@@ -590,6 +776,11 @@ class Ant {
     // AI awareness
     this.lastThought = '';
     this.lastThoughtTime = 0;
+
+    // Intelligent digging — assigned dig targets from colony tunnel plan
+    this.digTargetX = -1;
+    this.digTargetY = -1;
+    this.assignedType = ''; // 'shaft', 'gallery', 'chamber'
 
     // Vertical body oscillation (sinusoidal for unloaded, jerky for loaded)
     this.bodyBob = 0;
@@ -702,7 +893,7 @@ class Ant {
     }
 
     // Rest cycle
-    if (this.timeSinceRest > this.nextRestAt && this.state !== ST.CARRY && this.state !== ST.HAUL_SAND) {
+    if (this.timeSinceRest > this.nextRestAt && this.state !== ST.CARRY && this.state !== ST.HAUL_SAND && this.state !== ST.DIG_TO_TARGET) {
       this.state = ST.REST;
       this.restTimer = 0;
       this.timeSinceRest = 0;
@@ -795,24 +986,29 @@ class Ant {
         this.patience = 0;
         this.role = 'digger';
 
-        // Stigmergy: strongly prefer existing entrances (85%)
-        let bestEntrance = null, bestDist = 200;
-        for (let dx = -100; dx <= 100; dx += 2) {
-          const ex = this.gx() + dx;
-          if (ex >= 2 && ex < COLS - 2 && !cellAt(ex, SURFACE + 1) && !cellAt(ex, SURFACE + 2) && !cellAt(ex, SURFACE + 3)) {
-            const d = Math.abs(dx);
-            if (d < bestDist) { bestDist = d; bestEntrance = ex; }
-          }
+        // INTELLIGENCE: Always use the colony tunnel plan
+        if (!tunnelPlan.initialized) tunnelPlan.init();
+
+        // Get dig assignment from colony plan
+        const assignment = tunnelPlan.getDigAssignment(this.gx(), this.gy());
+        if (assignment) {
+          this.digTargetX = assignment.gx;
+          this.digTargetY = assignment.gy;
+          this.digAngle = assignment.angle;
+          this.assignedType = assignment.type;
         }
 
-        if (bestEntrance !== null && Math.random() < 0.85) {
-          this.targetX = bestEntrance * CELL;
+        // Always use an established entrance (virtually 100%)
+        const entrance = tunnelPlan.nearestEntrance(this.gx());
+        if (entrance) {
+          this.targetX = entrance.gx * CELL;
           this.state = ST.ENTER;
         } else {
+          // Fallback: start the main shaft (only first ant ever does this)
           this.state = ST.DIG_DOWN;
           this.digCount = 0;
-          // Dig straight down — real ant farm tunnels start vertical
-          this.digAngle = Math.PI * 0.5 + (Math.random() - 0.5) * 0.08;
+          this.digAngle = Math.PI * 0.5;
+          tunnelPlan.entrances.push({ gx: this.gx(), depth: 0 });
         }
         return;
       }
@@ -821,7 +1017,42 @@ class Ant {
       return;
     }
 
-    // Underground
+    // Underground — DIG_TO_TARGET: navigate through tunnels toward assigned dig site
+    if (this.state === ST.DIG_TO_TARGET) {
+      if (this.digCount >= this.maxSandCarry) {
+        this.carryingSand = this.digCount;
+        this.digCount = 0;
+        this.state = ST.HAUL_SAND;
+        return;
+      }
+      // Navigate toward target
+      if (this.digTargetX > 0 && this.digTargetY > 0) {
+        const tdx = this.digTargetX - s.gx, tdy = this.digTargetY - s.gy;
+        const tdist = Math.hypot(tdx, tdy);
+        if (tdist < 4) {
+          // Arrived at target — start digging in the assigned direction
+          if (this.assignedType === 'shaft') {
+            this.state = ST.DIG_DOWN;
+            this.digAngle = Math.PI * 0.5;
+          } else if (this.assignedType === 'chamber') {
+            this.state = ST.DIG_CHAMBER;
+            this.patience = 0;
+          } else {
+            this.state = ST.DIG_BRANCH;
+            this.digAngle = this.digAngle || (Math.random() < 0.5 ? 0 : Math.PI);
+          }
+          this.digTargetX = -1;
+          this.digTargetY = -1;
+          return;
+        }
+        // Navigate: prefer open paths, dig if blocked
+        this.digAngle = Math.atan2(tdy, tdx);
+        this.heading = this.digAngle;
+      }
+      return;
+    }
+
+    // Underground — structured digging using tunnel plan
     if (this.state === ST.DIG_DOWN || this.state === ST.DIG_BRANCH || this.state === ST.DIG_CHAMBER) {
       // Check if we need to haul sand to surface
       if (this.digCount >= this.maxSandCarry) {
@@ -831,39 +1062,61 @@ class Ant {
         return;
       }
 
-      if (s.depth > 0.2 + Math.random() * 0.6 && this.state === ST.DIG_DOWN) {
-        if (Math.random() < 0.35) {
-          this.state = ST.DIG_CHAMBER; this.patience = 0;
-        } else if (Math.random() < 0.5) {
+      // DIG_DOWN (shaft) — transitions to gallery at planned intervals
+      if (this.state === ST.DIG_DOWN) {
+        const galleryInterval = Math.round((ROWS - SURFACE) * 0.15);
+        const depthInGround = s.gy - SURFACE;
+        // At gallery depth? Branch horizontally
+        if (depthInGround > 5 && depthInGround % galleryInterval < 2 && Math.random() < 0.08) {
           this.state = ST.DIG_BRANCH;
-          // Branches go mostly horizontal with slight downward slope
-          this.digAngle = (Math.random() < 0.5 ? 0 : Math.PI) + (Math.random() - 0.5) * 0.3 + 0.15;
-        } else {
-          this.state = ST.EXPLORE;
+          this.digAngle = Math.random() < 0.5 ? 0 : Math.PI; // left or right
+          this.digAngle += (Math.random() - 0.5) * 0.15; // slight slope
+          return;
+        }
+        // Deep enough? Sometimes start a chamber or go explore
+        if (s.depth > 0.7 && Math.random() < 0.02) {
+          this.state = Math.random() < 0.3 ? ST.DIG_CHAMBER : ST.GO_UP;
+          this.patience = 0;
+          return;
+        }
+        // Keep shaft nearly vertical — very tight angle
+        if (Math.random() < 0.01) {
+          this.digAngle += (Math.random() - 0.5) * 0.08;
+        }
+        // Strong clamp to vertical
+        this.digAngle = this.digAngle * 0.92 + (Math.PI * 0.5) * 0.08;
+        return;
+      }
+
+      // DIG_BRANCH (gallery) — horizontal tunnel with slight curves
+      if (this.state === ST.DIG_BRANCH) {
+        // Piecewise linear: slight direction changes
+        if (Math.random() < 0.006) this.digAngle += (Math.random() - 0.5) * 0.3;
+        // Keep galleries mostly horizontal — clamp toward 0 or PI
+        const nearestH = Math.abs(this.digAngle) < Math.PI * 0.5 ? 0 : Math.PI;
+        this.digAngle = this.digAngle * 0.95 + nearestH * 0.05;
+        // End gallery after enough length, or start a chamber
+        if (Math.random() < 0.004) {
+          if (Math.random() < 0.4) {
+            this.state = ST.DIG_CHAMBER;
+            this.patience = 0;
+          } else {
+            this.state = Math.random() < 0.5 ? ST.GO_UP : ST.EXPLORE;
+          }
         }
         return;
       }
+
+      // DIG_CHAMBER — carve out a wider area
       if (this.state === ST.DIG_CHAMBER) {
         this.patience++;
-        const maxSize = 120 - s.depth * 60;
+        const maxSize = 100 - s.depth * 40;
         if (this.patience > maxSize) {
           this.state = Math.random() < 0.4 ? ST.GO_UP : ST.EXPLORE;
           this.patience = 0;
           phSet(s.gx, s.gy, 0.8, phDig);
         }
         return;
-      }
-      if (this.state === ST.DIG_BRANCH) {
-        // Piecewise linear tunnel: change direction every 5-15 body lengths
-        if (Math.random() < 0.008) this.digAngle += (Math.random() - 0.5) * 0.6;
-        if (Math.random() < 0.005) this.state = Math.random() < 0.5 ? ST.GO_UP : ST.EXPLORE;
-        return;
-      }
-      // Dig down: very gentle sway — keep nearly vertical
-      if (Math.random() < 0.01) {
-        this.digAngle += (Math.random() - 0.5) * 0.15;
-        // Clamp close to vertical (PI/2)
-        this.digAngle = Math.max(Math.PI * 0.35, Math.min(Math.PI * 0.65, this.digAngle));
       }
       return;
     }
@@ -875,15 +1128,40 @@ class Ant {
       if (s.trailGrad.angle !== null && s.trailGrad.strength > 0.05) {
         this.heading = this.heading * 0.7 + s.trailGrad.angle * 0.3;
       }
+      // Follow dig pheromones toward active dig sites (structured)
       if (s.digGrad.angle !== null && s.digGrad.strength > this.threshold.dig) {
-        this.state = ST.DIG_BRANCH;
-        this.digAngle = s.digGrad.angle;
+        // Get a proper assignment from the tunnel plan instead of random digging
+        const assignment = tunnelPlan.getDigAssignment(s.gx, s.gy);
+        if (assignment) {
+          this.digTargetX = assignment.gx;
+          this.digTargetY = assignment.gy;
+          this.digAngle = assignment.angle;
+          this.assignedType = assignment.type;
+          this.state = ST.DIG_TO_TARGET;
+        } else {
+          this.state = ST.DIG_BRANCH;
+          this.digAngle = s.digGrad.angle;
+        }
         this.role = 'digger';
         return;
       }
+      // Occasionally decide to go up or get a new dig assignment
       if (Math.random() < 0.003) {
-        this.state = scores.dig > 0.3 ? ST.DIG_BRANCH : ST.GO_UP;
-        this.digAngle = this.heading + (Math.random() - 0.5) * 1.0;
+        if (scores.dig > 0.3) {
+          const assignment = tunnelPlan.getDigAssignment(s.gx, s.gy);
+          if (assignment) {
+            this.digTargetX = assignment.gx;
+            this.digTargetY = assignment.gy;
+            this.digAngle = assignment.angle;
+            this.assignedType = assignment.type;
+            this.state = ST.DIG_TO_TARGET;
+            this.role = 'digger';
+          } else {
+            this.state = ST.GO_UP;
+          }
+        } else {
+          this.state = ST.GO_UP;
+        }
       }
       return;
     }
@@ -955,7 +1233,7 @@ class Ant {
       phSet(gx, gy, 0.2, phTrail);
     } else if (this.carryingSand > 0) {
       phSet(gx, gy, 0.15, phTrail);
-    } else if (this.state === ST.DIG_DOWN || this.state === ST.DIG_BRANCH || this.state === ST.DIG_CHAMBER) {
+    } else if (this.state === ST.DIG_DOWN || this.state === ST.DIG_BRANCH || this.state === ST.DIG_CHAMBER || this.state === ST.DIG_TO_TARGET) {
       phSet(gx, gy, 0.25, phDig);
       phSet(gx, gy, 0.15, phTrail);
     } else {
@@ -969,6 +1247,7 @@ class Ant {
       case ST.ENTER: this._enter(s, spd); break;
       case ST.DIG_DOWN: case ST.DIG_BRANCH: this._digTunnel(s, spd); break;
       case ST.DIG_CHAMBER: this._digChamber(s, spd); break;
+      case ST.DIG_TO_TARGET: this._digToTarget(s, spd); break;
       case ST.EXPLORE: this._explore(s, spd); break;
       case ST.WALL_FOLLOW: this._wallFollow(s, spd); break;
       case ST.GO_UP: case ST.CARRY: case ST.HAUL_SAND: this._goUp(s, spd); break;
@@ -1004,7 +1283,7 @@ class Ant {
     let nx = this.x + this.vx, ny = this.y + this.vy;
     const ngx = (nx / CELL) | 0, ngy = (ny / CELL) | 0;
 
-    const digging = this.state === ST.DIG_DOWN || this.state === ST.DIG_BRANCH || this.state === ST.DIG_CHAMBER;
+    const digging = this.state === ST.DIG_DOWN || this.state === ST.DIG_BRANCH || this.state === ST.DIG_CHAMBER || this.state === ST.DIG_TO_TARGET;
     if (isSolid(ngx, ngy) && !digging) {
       if (!isSolid(s.gx, ngy)) { nx = this.x; this.vx *= 0.15; }
       else if (!isSolid(ngx, s.gy)) { ny = this.y; this.vy *= 0.15; }
@@ -1070,22 +1349,31 @@ class Ant {
         // Keep on surface while walking to entrance
         if (this.y < SURFACE_PX - CELL) this.vy += 0.2;
       } else {
-        // At entrance — head down into the tunnel
+        // At entrance — head DOWN into the main shaft first
         this.vy += spd * 0.5;
         this.heading = Math.PI * 0.5;
-        this.state = ST.EXPLORE; this.targetX = -1;
+        this.targetX = -1;
+
+        // INTELLIGENCE: If ant has a dig target, navigate toward it
+        if (this.digTargetX > 0 && this.digTargetY > 0) {
+          this.state = ST.DIG_TO_TARGET;
+        } else {
+          // Default: dig down the main shaft
+          this.state = ST.DIG_DOWN;
+          this.digAngle = Math.PI * 0.5;
+          this.digCount = 0;
+        }
       }
     }
     this.vx *= 0.92; this.vy *= 0.92;
   }
 
   _digTunnel(s, spd) {
-    // DIG_DOWN: dig nearly straight down (real tunnel shafts are vertical)
-    // DIG_BRANCH: dig horizontally or at slight angles
     const isDrilling = this.state === ST.DIG_DOWN;
+
+    // Shaft digging: keep strongly vertical
     if (isDrilling) {
-      // Keep dig angle nearly vertical — clamp strongly toward straight down
-      this.digAngle = this.digAngle * 0.95 + (Math.PI * 0.5) * 0.05;
+      this.digAngle = this.digAngle * 0.9 + (Math.PI * 0.5) * 0.1;
     }
 
     const dx = Math.cos(this.digAngle), dy = Math.sin(this.digAngle);
@@ -1104,24 +1392,29 @@ class Ant {
           this.digAngle += (Math.random() - 0.5) * 0.8;
           this.digCD = 10;
         } else {
-          // Dig 1-2 cells — one grain at a time
+          // Dig tunnel — wider for shafts (2 cells), narrow for galleries
+          const digRadius = isDrilling ? 1.5 : 1;
           let dugCount = 0;
           for (let ddx = -1; ddx <= 1; ddx++) for (let ddy = -1; ddy <= 1; ddy++) {
-            if (ddx * ddx + ddy * ddy <= 1 && dugCount < 2) {
+            if (ddx * ddx + ddy * ddy <= digRadius * digRadius && dugCount < 3) {
               const result = digCell(fwdX + ddx, fwdY + ddy);
               if (result) { dugCount++; this.digCount++; }
             }
           }
-          this.digCD = 10 + (hardness * 2) + (Math.random() * 6) | 0;
+          this.digCD = 8 + (hardness * 2) + (Math.random() * 4) | 0;
           this.energy -= 0.4;
           phSet(s.gx, s.gy, 0.4, phDig);
-          if (dugCount > 0) spawnDirt(fwdX * CELL, fwdY * CELL);
+          if (dugCount > 0) {
+            spawnDirt(fwdX * CELL, fwdY * CELL);
+            // Notify tunnel plan of digging
+            tunnelPlan.notifyDig(fwdX, fwdY);
+          }
         }
       } else {
         // Open space ahead — advance into it
         this.vx += dx * spd * 0.3;
         this.vy += dy * spd * 0.3;
-        this.digCD = 5;
+        this.digCD = 3;
       }
     }
   }
@@ -1135,15 +1428,79 @@ class Ant {
     if (this.digCD <= 0) {
       let dugCount = 0;
       for (let ddx = -2; ddx <= 2; ddx++) for (let ddy = -2; ddy <= 2; ddy++) {
-        if (ddx * ddx + ddy * ddy <= 4 && Math.random() < 0.5 && dugCount < 3) {
+        if (ddx * ddx + ddy * ddy <= 5 && Math.random() < 0.5 && dugCount < 4) {
           const result = digCell(s.gx + ddx, s.gy + ddy);
           if (result) { dugCount++; this.digCount++; }
         }
       }
-      this.digCD = 18 + (Math.random() * 12) | 0;
+      this.digCD = 14 + (Math.random() * 10) | 0;
       this.energy -= 0.35;
-      if (dugCount > 0) spawnDirt(this.x, this.y);
+      if (dugCount > 0) {
+        spawnDirt(this.x, this.y);
+        tunnelPlan.notifyDig(s.gx, s.gy);
+      }
     }
+  }
+
+  _digToTarget(s, spd) {
+    // Navigate through tunnels toward an assigned dig target
+    // If in open space, move toward target; if solid, dig through
+    if (this.digTargetX < 0 || this.digTargetY < 0) {
+      this.state = ST.EXPLORE;
+      return;
+    }
+    const tdx = this.digTargetX - s.gx, tdy = this.digTargetY - s.gy;
+    const tdist = Math.hypot(tdx, tdy);
+
+    if (tdist < 4) {
+      // Arrived — start assigned digging
+      if (this.assignedType === 'shaft') {
+        this.state = ST.DIG_DOWN;
+        this.digAngle = Math.PI * 0.5;
+      } else if (this.assignedType === 'chamber') {
+        this.state = ST.DIG_CHAMBER;
+        this.patience = 0;
+      } else {
+        this.state = ST.DIG_BRANCH;
+        // Gallery direction based on which side of shaft we are
+        this.digAngle = s.gx < tunnelPlan.mainShaftX ? Math.PI : 0;
+      }
+      this.digTargetX = -1;
+      this.digTargetY = -1;
+      return;
+    }
+
+    // Move toward target through tunnels
+    const angle = Math.atan2(tdy, tdx);
+    this.heading = this.heading * 0.6 + angle * 0.4;
+    const dx = Math.cos(this.heading), dy = Math.sin(this.heading);
+
+    // Check if path ahead is open
+    const aheadX = s.gx + Math.round(dx * 2), aheadY = s.gy + Math.round(dy * 2);
+    if (!isSolid(aheadX, aheadY)) {
+      // Open path — walk through
+      this.vx += dx * spd * 0.4;
+      this.vy += dy * spd * 0.4;
+    } else {
+      // Blocked — dig through
+      if (this.digCD <= 0) {
+        let dugCount = 0;
+        for (let ddx = -1; ddx <= 1; ddx++) for (let ddy = -1; ddy <= 1; ddy++) {
+          if (ddx * ddx + ddy * ddy <= 1 && dugCount < 2) {
+            const result = digCell(aheadX + ddx, aheadY + ddy);
+            if (result) { dugCount++; this.digCount++; }
+          }
+        }
+        this.digCD = 8;
+        if (dugCount > 0) {
+          spawnDirt(aheadX * CELL, aheadY * CELL);
+          tunnelPlan.notifyDig(aheadX, aheadY);
+        }
+      }
+      this.vx += dx * spd * 0.15;
+      this.vy += dy * spd * 0.15;
+    }
+    this.vx *= 0.85; this.vy *= 0.85;
   }
 
   _explore(s, spd) {
@@ -1155,12 +1512,15 @@ class Ant {
     const aheadY = s.gy + Math.round(Math.sin(this.heading) * 3);
     if (isSolid(aheadX, aheadY)) {
       this.heading += Math.PI * 0.5 + (Math.random() - 0.5) * 0.5;
-      if (this.threshold.dig < 0.3 && this.digCD <= 0 && Math.random() < 0.15) {
+      // Only dig when exploring if it extends existing tunnel network
+      if (this.threshold.dig < 0.3 && this.digCD <= 0 && Math.random() < 0.08) {
+        let dugCount = 0;
         for (let d = -1; d <= 1; d++) for (let e = -1; e <= 1; e++) {
           const r = digCell(aheadX + d, aheadY + e);
-          if (r) this.digCount++;
+          if (r) { this.digCount++; dugCount++; }
         }
         this.digCD = 12;
+        if (dugCount > 0) tunnelPlan.notifyDig(aheadX, aheadY);
       }
     }
     this.vx *= 0.88; this.vy *= 0.88;
@@ -1788,7 +2148,7 @@ function begin() {
     document.getElementById('intro').style.display = 'none';
     document.getElementById('app').classList.add('show');
     canvas.width = W; canvas.height = H; resizeCanvas();
-    genSandNoise(); initTerrain(); dropAnts(8);
+    genSandNoise(); initTerrain(); tunnelPlan.init(); dropAnts(8);
     running = true; tick();
   }, 500);
 }
