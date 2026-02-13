@@ -38,6 +38,54 @@
   .topbar .title em { font-style: italic; }
   .topbar .stats { display: flex; gap: 24px; font-size: 0.72rem; color: #999; letter-spacing: 0.04em; }
   .topbar .stats .v { color: #1a1a1a; font-weight: 500; margin-left: 6px; font-variant-numeric: tabular-nums; }
+
+  /* ── Intelligence Indicator (top bar) ── */
+  .intel-bar {
+    display: flex; align-items: center; gap: 0;
+    height: 36px; flex-shrink: 0;
+    border-bottom: 1px solid #eee; background: #fafaf8;
+    padding: 0 24px; overflow: hidden;
+    opacity: 0; transition: opacity 0.6s ease;
+  }
+  .intel-bar.show { opacity: 1; }
+  .intel-brain {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 0.62rem; color: #bbb; letter-spacing: 0.08em;
+    text-transform: uppercase; white-space: nowrap; flex-shrink: 0;
+  }
+  .intel-brain .brain-icon {
+    width: 16px; height: 16px; position: relative; display: flex; align-items: center; justify-content: center;
+  }
+  .intel-brain .brain-dot {
+    width: 6px; height: 6px; border-radius: 50%; background: #c084fc;
+    animation: brain-pulse 2.5s ease-in-out infinite;
+  }
+  .intel-brain .brain-ring {
+    position: absolute; inset: 0; border: 1.5px solid rgba(192,132,252,0.3);
+    border-radius: 50%; animation: brain-ring 2.5s ease-in-out infinite;
+  }
+  @keyframes brain-pulse { 0%, 100% { opacity: 0.6; transform: scale(0.85); } 50% { opacity: 1; transform: scale(1.15); } }
+  @keyframes brain-ring { 0%, 100% { opacity: 0.2; transform: scale(0.8); } 50% { opacity: 0.5; transform: scale(1.2); } }
+  .intel-divider {
+    width: 1px; height: 16px; background: #e8e4de; margin: 0 14px; flex-shrink: 0;
+  }
+  .intel-focus {
+    font-family: 'EB Garamond', serif; font-size: 0.85rem;
+    color: #1a1a1a; font-style: italic; white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .intel-roles {
+    font-size: 0.6rem; color: #aaa; letter-spacing: 0.03em;
+    font-variant-numeric: tabular-nums; white-space: nowrap; flex-shrink: 0;
+    margin-left: 14px;
+  }
+  .intel-roles .role-count { color: #777; font-weight: 500; }
+  .intel-narration {
+    font-family: 'EB Garamond', serif; font-size: 0.78rem;
+    color: #999; font-style: italic; margin-left: auto;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    max-width: 380px; padding-left: 14px;
+  }
   .canvas-wrap {
     flex: 1; position: relative; overflow: hidden;
     background: #e8e0d4; cursor: crosshair;
@@ -75,31 +123,8 @@
   }
   .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
-  /* ── AI Intelligence Panel ── */
-  .ai-panel {
-    position: fixed; top: 58px; right: 12px;
-    background: rgba(255,255,255,0.92); backdrop-filter: blur(10px);
-    border: 1px solid #e8e4de; padding: 12px 16px;
-    font-size: 0.68rem; line-height: 1.5; color: #888;
-    z-index: 45; opacity: 0; transition: opacity 0.6s ease;
-    max-width: 280px; pointer-events: none;
-  }
-  .ai-panel.show { opacity: 1; pointer-events: auto; }
-  .ai-panel .ai-label {
-    color: #bbb; font-size: 0.55rem; letter-spacing: 0.1em;
-    text-transform: uppercase; margin-bottom: 6px;
-  }
-  .ai-panel .ai-focus {
-    color: #1a1a1a; font-size: 0.72rem; font-weight: 500; margin-bottom: 4px;
-  }
-  .ai-panel .ai-roles {
-    color: #999; font-size: 0.62rem; font-variant-numeric: tabular-nums;
-    margin-bottom: 6px; letter-spacing: 0.02em;
-  }
-  .ai-panel .ai-narration {
-    color: #555; font-family: 'EB Garamond', serif;
-    font-size: 0.82rem; font-style: italic; line-height: 1.5;
-  }
+  /* ── AI Intelligence Panel (hidden — replaced by intel-bar) ── */
+  .ai-panel { display: none; }
 
   /* ── Hidden Admin Panel ── */
   .admin-panel {
@@ -143,6 +168,19 @@
       <span>Chambers<span class="v" id="sChambers">0</span></span>
       <span>Day<span class="v" id="sDay">1</span></span>
     </div>
+  </div>
+  <div class="intel-bar" id="intelBar">
+    <div class="intel-brain">
+      <div class="brain-icon">
+        <div class="brain-dot"></div>
+        <div class="brain-ring"></div>
+      </div>
+      <span>Claude AI</span>
+    </div>
+    <div class="intel-divider"></div>
+    <div class="intel-focus" id="intelFocus">Waiting for directive...</div>
+    <div class="intel-roles" id="intelRoles"></div>
+    <div class="intel-narration" id="intelNarration"></div>
   </div>
   <div class="canvas-wrap" id="wrap">
     <canvas id="c"></canvas>
@@ -375,8 +413,8 @@ function updateAIPanel(directive, roleCounts) {
   const panel = document.getElementById('aiPanel');
   panel.classList.add('show');
 
-  document.getElementById('aiFocus').textContent =
-    FOCUS_LABELS[directive.focus] || directive.focus;
+  const focusText = FOCUS_LABELS[directive.focus] || directive.focus;
+  document.getElementById('aiFocus').textContent = focusText;
 
   if (roleCounts) {
     document.getElementById('aiRoles').textContent =
@@ -386,6 +424,24 @@ function updateAIPanel(directive, roleCounts) {
 
   if (directive.narration) {
     document.getElementById('aiNarration').textContent = directive.narration;
+  }
+
+  // ── Update top intelligence bar ──
+  const intelBar = document.getElementById('intelBar');
+  intelBar.classList.add('show');
+  document.getElementById('intelFocus').textContent = focusText;
+
+  if (roleCounts) {
+    const total = roleCounts.digger + roleCounts.forager + roleCounts.explorer + roleCounts.idle;
+    document.getElementById('intelRoles').innerHTML =
+      '<span class="role-count">' + roleCounts.digger + '</span> digging · ' +
+      '<span class="role-count">' + roleCounts.forager + '</span> foraging · ' +
+      '<span class="role-count">' + roleCounts.explorer + '</span> exploring · ' +
+      '<span class="role-count">' + roleCounts.idle + '</span> idle';
+  }
+
+  if (directive.narration) {
+    document.getElementById('intelNarration').textContent = '"' + directive.narration + '"';
   }
 }
 
