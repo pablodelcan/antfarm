@@ -1,0 +1,21 @@
+{
+  "name": "antfarm",
+  "version": "7.0.0",
+  "private": true,
+  "description": "A living ant colony simulation with Claude AI intelligence",
+  "scripts": {
+    "dev": "vercel dev",
+    "build": "vercel build",
+    "test-sim": "npx tsx lib/test-simulation.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "@vercel/kv": "^3.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "vercel": "^39.0.0"
+  }
+}

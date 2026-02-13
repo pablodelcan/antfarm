@@ -20,7 +20,8 @@
   .intro.hide { opacity: 0; pointer-events: none; }
   .intro h1 { font-family: 'EB Garamond', serif; font-size: clamp(2.5rem, 5vw, 4.5rem); font-weight: 400; margin-bottom: 12px; }
   .intro h1 em { font-style: italic; }
-  .intro .sub { color: #999; font-size: 0.82rem; letter-spacing: 0.08em; margin-bottom: 48px; }
+  .intro .sub { color: #999; font-size: 0.82rem; letter-spacing: 0.08em; margin-bottom: 12px; }
+  .intro .sub2 { color: #bbb; font-size: 0.7rem; letter-spacing: 0.06em; margin-bottom: 48px; }
   .intro button {
     background: none; border: 1px solid #ddd; color: #1a1a1a;
     font-family: 'Inter', sans-serif; font-size: 0.78rem; letter-spacing: 0.14em;
@@ -58,15 +59,15 @@
     display: flex; align-items: center; justify-content: center; gap: 1px;
     height: 40px; flex-shrink: 0; border-top: 1px solid #eee; background: #fff;
   }
-  .bottombar button {
-    background: #fff; border: none; border-right: 1px solid #eee; color: #888;
-    font-family: 'Inter', sans-serif; font-size: 0.7rem; letter-spacing: 0.06em;
-    padding: 0 20px; height: 100%; cursor: pointer; transition: all 0.15s;
-    display: flex; align-items: center; gap: 6px;
+  .bottombar .status {
+    font-size: 0.68rem; color: #aaa; letter-spacing: 0.04em;
+    padding: 0 20px; display: flex; align-items: center; gap: 8px;
   }
-  .bottombar button:last-child { border-right: none; }
-  .bottombar button:hover { background: #f8f8f8; color: #1a1a1a; }
-  .bottombar .speed-label { font-variant-numeric: tabular-nums; min-width: 22px; text-align: center; color: #1a1a1a; font-weight: 500; }
+  .bottombar .status .dot {
+    width: 6px; height: 6px; border-radius: 50%; background: #4ade80;
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
   .toast {
     position: fixed; bottom: 56px; left: 50%; transform: translateX(-50%) translateY(8px);
     background: #1a1a1a; color: #fff; padding: 8px 20px; font-size: 0.72rem;
@@ -76,14 +77,14 @@
   .ai-thought {
     position: fixed; bottom: 56px; right: 24px;
     background: rgba(255,255,255,0.95); backdrop-filter: blur(8px);
-    border: 1px solid #e0e0e0; padding: 8px 14px;
-    font-size: 0.68rem; line-height: 1.4; color: #555;
-    z-index: 90; opacity: 0; transition: all 0.4s ease; max-width: 260px;
+    border: 1px solid #e0e0e0; padding: 10px 16px;
+    font-size: 0.72rem; line-height: 1.5; color: #555;
+    z-index: 90; opacity: 0; transition: all 0.6s ease; max-width: 320px;
     pointer-events: none;
   }
   .ai-thought.show { opacity: 1; }
-  .ai-thought .ai-name { color: #1a1a1a; font-weight: 500; font-size: 0.7rem; }
-  .ai-thought .ai-text { color: #666; margin-top: 2px; font-style: italic; }
+  .ai-thought .ai-label { color: #aaa; font-size: 0.6rem; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 4px; }
+  .ai-thought .ai-text { color: #444; font-family: 'EB Garamond', serif; font-size: 0.85rem; font-style: italic; line-height: 1.5; }
 </style>
 </head>
 <body>
@@ -91,6 +92,7 @@
 <div class="intro" id="intro">
   <h1><em>Antfarm</em></h1>
   <p class="sub">a living colony simulation</p>
+  <p class="sub2">guided by Claude AI — shared with everyone</p>
   <button onclick="begin()">Enter</button>
 </div>
 
@@ -108,11 +110,10 @@
     <canvas id="c"></canvas>
   </div>
   <div class="bottombar">
-    <button onclick="dropAnts(5)"><span>+</span> 5 ants</button>
-    <button onclick="dropAnts(1)"><span>+</span> 1 ant</button>
-    <button onclick="dropFood()">food</button>
-    <button onclick="cycleSpeed()"><span class="speed-label" id="speedLabel">1x</span></button>
-    <button onclick="togglePause()" id="pauseBtn">pause</button>
+    <div class="status">
+      <span class="dot"></span>
+      <span id="statusText">Connecting to colony...</span>
+    </div>
   </div>
 </div>
 
@@ -126,329 +127,222 @@
 </div>
 <div class="toast" id="toast"></div>
 <div class="ai-thought" id="aiThought">
-  <div class="ai-name" id="aiName"></div>
+  <div class="ai-label">Colony Intelligence</div>
   <div class="ai-text" id="aiText"></div>
 </div>
 
 <script>
 // ═══════════════════════════════════════════════════════════════════
-//  ANTFARM v7 — Intelligent colony simulation with structured tunnels
-//
-//  Based on published myrmecology research:
-//  - Speed: harvester ants 1.5-3 cm/s (~3-6 BL/s), 30-50% slower loaded
-//  - Gait: alternating tripod, sinusoidal body oscillation
-//  - Correlated random walk with ±15-20° per step, meandering ~3 BL wavelength
-//  - Pheromone trails with exponential decay
-//  - Stigmergy: extend existing tunnels, follow walls
-//  - Self-organized role allocation via response thresholds
-//  - Sand displacement: ants carry excavated grains to surface, build mounds
-//  - Tandem running: experienced ants guide naive ones at 25% speed
-//  - AI awareness: periodic situational assessment every ~10s
-//  - Tunnel intelligence: shared colony tunnel plan with main shaft,
-//    horizontal galleries at regular depth intervals, and chambers
-//  - Ants coordinate: reuse entrances, extend existing tunnels, avoid
-//    creating parallel shafts
+//  ANTFARM — Viewer Client
+//  Fetches colony state from /api/state every 3 seconds
+//  Renders ants + terrain with smooth interpolation
+//  All simulation runs server-side — this is purely a renderer
 // ═══════════════════════════════════════════════════════════════════
 
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 const tooltip = document.getElementById('tooltip');
 
-// ── Dimensions ──
-// Farm is ~40cm wide = 960px, so 1cm = 24px
-// Harvester ant body ~6mm = ~14.4px, use ~14px
+// ── Constants (must match server) ──
 const W = 960, H = 680;
-const CELL = 3; // 3px cells — smoother terrain, less pixelation
+const CELL = 3;
 const COLS = W / CELL, ROWS = Math.ceil(H / CELL);
 const SURFACE = Math.round(ROWS * 0.27);
 const SURFACE_PX = SURFACE * CELL;
 const FRAME = 14;
+const SAND_R = 212, SAND_G = 194, SAND_B = 162;
 
-// ── Real-world scale ──
-// 1 pixel = 0.417mm (960px = 40cm)
-// Ant body = 6mm = ~14.4px
-// Speed: 2cm/s = 48px/s = 0.8px/frame at 60fps
-const PX_PER_CM = 24;
-const ANT_BODY_PX = 14;
+// ── State Names ──
+const ST_NAMES = [
+  'Wandering', 'Entering', 'Digging down', 'Branching', 'Carving chamber',
+  'Exploring', 'Returning', 'Foraging', 'Carrying food', 'Resting', 'Wall following',
+  'Hauling sand', 'Leading', 'Following', 'Communicating', 'Pausing', 'Navigating to dig site'
+];
 
-// ── Simulation State ──
-let grid, phTrail, phFood, phDig;
-let ants = [], foods = [], particles = [], chambers = [];
+// ── Viewer State ──
+let grid = null;          // Uint8Array from server
+let ants = [];            // Current ant positions (interpolated)
+let antsTarget = [];      // Target ant positions (from latest server state)
+let antsPrev = [];        // Previous ant positions (for interpolation)
+let foods = [];
+let chambers = [];
+let particles = [];
 let frame = 0, totalDug = 0, simDay = 1;
-let speed = 1, paused = false, running = false;
+let running = false;
 let hoveredAnt = null, mouseX = 0, mouseY = 0;
-let hasQueen = false;
-
-// ═══════════════════════════════════════════════════════════════════
-//  COLONY TUNNEL PLAN — Shared intelligence for structured tunnels
-//  Real ant farms show: 1-2 main vertical shafts with horizontal
-//  galleries branching off at regular depth intervals, ending in chambers.
-//  This plan coordinates all ants to build this structure.
-// ═══════════════════════════════════════════════════════════════════
-const tunnelPlan = {
-  entrances: [],        // [{gx, depth}] — established entrance columns
-  mainShaftX: -1,       // grid X of the primary main shaft
-  mainShaftX2: -1,      // grid X of secondary shaft (if colony grows)
-  galleries: [],        // [{depth, leftExtent, rightExtent, complete}]
-  digFrontier: [],      // [{gx, gy, type:'shaft'|'gallery'|'chamber', priority}]
-  shaftBottom: 0,       // deepest point of main shaft (grid Y)
-  shaftBottom2: 0,      // deepest point of secondary shaft
-  initialized: false,
-
-  init() {
-    // Place main shaft near center, slightly randomized
-    this.mainShaftX = Math.round(COLS * 0.45 + Math.random() * COLS * 0.1);
-    this.mainShaftX2 = -1;
-    this.entrances = [{ gx: this.mainShaftX, depth: 0 }];
-    this.galleries = [];
-    this.shaftBottom = SURFACE + 2;
-    this.shaftBottom2 = SURFACE;
-    this.initialized = true;
-    this._updateFrontier();
-  },
-
-  // Find the nearest entrance to a given surface position
-  nearestEntrance(gx) {
-    if (this.entrances.length === 0) return null;
-    let best = null, bestDist = Infinity;
-    for (const e of this.entrances) {
-      const d = Math.abs(e.gx - gx);
-      if (d < bestDist) { bestDist = d; best = e; }
-    }
-    return best;
-  },
-
-  // Get the best dig assignment for an ant based on its position
-  getDigAssignment(antGx, antGy) {
-    if (this.digFrontier.length === 0) this._updateFrontier();
-
-    // Find closest frontier point that isn't too crowded
-    let best = null, bestScore = -Infinity;
-    for (const f of this.digFrontier) {
-      const dist = Math.hypot(f.gx - antGx, f.gy - antGy);
-      // Count nearby diggers at this frontier point
-      let crowding = 0;
-      for (const a of ants) {
-        if (a.role === 'digger' && Math.hypot(a.gx() - f.gx, a.gy() - f.gy) < 8) crowding++;
-      }
-      const score = f.priority * 3 - dist * 0.5 - crowding * 8;
-      if (score > bestScore) { bestScore = score; best = f; }
-    }
-    return best;
-  },
-
-  // Update the dig frontier based on current tunnel state
-  _updateFrontier() {
-    this.digFrontier = [];
-    const maxDepthY = ROWS - 8;
-
-    // 1. Main shaft — always extend downward if not at bottom
-    if (this.shaftBottom < maxDepthY) {
-      this.digFrontier.push({
-        gx: this.mainShaftX, gy: this.shaftBottom + 1,
-        type: 'shaft', angle: Math.PI * 0.5, priority: 10
-      });
-    }
-
-    // 2. Secondary shaft (after colony reaches certain size)
-    if (this.mainShaftX2 > 0 && this.shaftBottom2 < maxDepthY) {
-      this.digFrontier.push({
-        gx: this.mainShaftX2, gy: this.shaftBottom2 + 1,
-        type: 'shaft', angle: Math.PI * 0.5, priority: 7
-      });
-    }
-
-    // 3. Horizontal galleries at regular intervals
-    const galleryInterval = Math.round((ROWS - SURFACE) * 0.15); // every ~15% of depth
-    for (let depth = SURFACE + galleryInterval; depth < Math.min(this.shaftBottom, maxDepthY); depth += galleryInterval) {
-      // Check if gallery exists at this depth
-      let gallery = this.galleries.find(g => Math.abs(g.depth - depth) < 3);
-      if (!gallery) {
-        gallery = { depth, leftExtent: this.mainShaftX, rightExtent: this.mainShaftX, complete: false };
-        this.galleries.push(gallery);
-      }
-
-      if (!gallery.complete) {
-        // Extend gallery left
-        if (gallery.leftExtent > 8) {
-          this.digFrontier.push({
-            gx: gallery.leftExtent - 2, gy: depth,
-            type: 'gallery', angle: Math.PI, priority: 6
-          });
-        }
-        // Extend gallery right
-        if (gallery.rightExtent < COLS - 8) {
-          this.digFrontier.push({
-            gx: gallery.rightExtent + 2, gy: depth,
-            type: 'gallery', angle: 0, priority: 6
-          });
-        }
-        // Mark complete if wide enough
-        const width = gallery.rightExtent - gallery.leftExtent;
-        if (width > COLS * 0.4) gallery.complete = true;
-      }
-
-      // 4. Chamber at end of galleries
-      if (gallery.leftExtent < this.mainShaftX - 15) {
-        this.digFrontier.push({
-          gx: gallery.leftExtent - 1, gy: depth,
-          type: 'chamber', angle: Math.PI, priority: 4
-        });
-      }
-      if (gallery.rightExtent > this.mainShaftX + 15) {
-        this.digFrontier.push({
-          gx: gallery.rightExtent + 1, gy: depth,
-          type: 'chamber', angle: 0, priority: 4
-        });
-      }
-    }
-
-    // 5. If secondary shaft needed and colony is big enough
-    if (ants.length > 15 && this.mainShaftX2 < 0) {
-      this.mainShaftX2 = this.mainShaftX + Math.round(COLS * 0.25) * (Math.random() < 0.5 ? 1 : -1);
-      this.mainShaftX2 = Math.max(10, Math.min(COLS - 10, this.mainShaftX2));
-      this.shaftBottom2 = SURFACE + 2;
-      this.entrances.push({ gx: this.mainShaftX2, depth: 0 });
-    }
-  },
-
-  // Called when digging occurs to update shaft/gallery tracking
-  notifyDig(gx, gy) {
-    // Update shaft bottoms
-    if (Math.abs(gx - this.mainShaftX) < 3 && gy > this.shaftBottom) {
-      this.shaftBottom = gy;
-    }
-    if (this.mainShaftX2 > 0 && Math.abs(gx - this.mainShaftX2) < 3 && gy > this.shaftBottom2) {
-      this.shaftBottom2 = gy;
-    }
-    // Update gallery extents
-    for (const gallery of this.galleries) {
-      if (Math.abs(gy - gallery.depth) < 2) {
-        if (gx < gallery.leftExtent) gallery.leftExtent = gx;
-        if (gx > gallery.rightExtent) gallery.rightExtent = gx;
-      }
-    }
-    // Refresh frontier periodically
-    if (frame % 120 === 0) this._updateFrontier();
-  }
-};
-
-// ── Smooth terrain ──
-// Multi-octave Perlin-like noise for natural sand texture
-let sandNoise;
-let terrainDirty = true; // flag to re-render terrain only when changed
+let terrainDirty = true;
+let lastNarration = '';
+let narrationTimeout = null;
+let lastFetchTime = 0;
+let interpolateT = 0;     // 0-1, how far between prev and target state
+const POLL_INTERVAL = 3000; // Fetch every 3 seconds
+const INTERP_SPEED = 1.0 / (POLL_INTERVAL / 16.67); // reach target in one poll interval
 
 // ── Offscreen terrain canvas ──
 const tOff = document.createElement('canvas');
 tOff.width = W; tOff.height = H;
 const tCtx = tOff.getContext('2d');
+let terrainImageData;
 
 // ═══════════════════════════════════════════════════════════════════
-//  TERRAIN — Smooth, non-pixelated sand rendering
+//  BASE64 DECODE — match server encoding
 // ═══════════════════════════════════════════════════════════════════
 
-// Improved noise: value noise with smooth interpolation
-function smoothNoise(x, y, seed) {
-  const ix = Math.floor(x), iy = Math.floor(y);
-  const fx = x - ix, fy = y - iy;
-  // Smoothstep
-  const sx = fx * fx * (3 - 2 * fx);
-  const sy = fy * fy * (3 - 2 * fy);
-  const n00 = hashN(ix, iy, seed);
-  const n10 = hashN(ix + 1, iy, seed);
-  const n01 = hashN(ix, iy + 1, seed);
-  const n11 = hashN(ix + 1, iy + 1, seed);
-  return lerp(lerp(n00, n10, sx), lerp(n01, n11, sx), sy);
-}
-function hashN(x, y, s) { let n = Math.sin(x * 127.1 + y * 311.7 + s * 73.3) * 43758.5453; return n - Math.floor(n); }
-function lerp(a, b, t) { return a + (b - a) * t; }
-
-function fbm(x, y) {
-  return smoothNoise(x, y, 0) * 0.5
-       + smoothNoise(x * 2.1, y * 2.3, 1) * 0.25
-       + smoothNoise(x * 4.7, y * 4.1, 2) * 0.125
-       + smoothNoise(x * 9.3, y * 8.7, 3) * 0.0625;
+function base64ToUint8(b64) {
+  const bin = atob(b64);
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return arr;
 }
 
-function genSandNoise() {
-  // Pre-compute multi-frequency noise for every pixel
-  sandNoise = new Float32Array(W * H);
-  for (let py = 0; py < H; py++) {
-    for (let px = 0; px < W; px++) {
-      // Combine multiple scales for natural texture
-      const n1 = smoothNoise(px * 0.02, py * 0.02, 10) * 0.5;
-      const n2 = smoothNoise(px * 0.05, py * 0.05, 20) * 0.25;
-      const n3 = smoothNoise(px * 0.12, py * 0.12, 30) * 0.125;
-      const n4 = smoothNoise(px * 0.3, py * 0.3, 40) * 0.0625;
-      sandNoise[py * W + px] = (n1 + n2 + n3 + n4 - 0.45) * 2;
+// ═══════════════════════════════════════════════════════════════════
+//  SERVER STATE FETCHING
+// ═══════════════════════════════════════════════════════════════════
+
+async function fetchState() {
+  try {
+    const res = await fetch('/api/state');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+
+    if (data.status === 'initializing') {
+      document.getElementById('statusText').textContent = 'Colony initializing...';
+      return;
     }
+
+    // Decode grid from base64
+    if (data.grid && typeof data.grid === 'string') {
+      grid = base64ToUint8(data.grid);
+      terrainDirty = true;
+    }
+
+    // Update state
+    totalDug = data.totalDug || 0;
+    simDay = data.simDay || 1;
+    frame = data.frame || 0;
+    foods = data.foods || [];
+    chambers = data.chambers || [];
+
+    // Save previous ant positions for interpolation
+    antsPrev = ants.map(a => ({ ...a }));
+
+    // Update target ant positions
+    antsTarget = (data.ants || []).map(a => ({
+      id: a.id,
+      x: a.x, y: a.y,
+      vx: a.vx, vy: a.vy,
+      state: a.state,
+      role: a.role,
+      isQueen: a.isQueen,
+      carrying: a.carrying,
+      carryingSand: a.carryingSand,
+      size: a.size,
+      hue: a.hue,
+      legT: a.legT,
+      antT: a.antT,
+      bodyBob: a.bodyBob,
+      isPaused: a.isPaused,
+      antennateTimer: a.antennateTimer,
+      name: a.name,
+      energy: a.energy,
+      age: a.age || 0,
+      lastThought: a.lastThought || '',
+      tandemTargetId: a.tandemTargetId
+    }));
+
+    // Match previous ants to new ants by ID for smooth interpolation
+    if (antsPrev.length === 0) {
+      // First load — no interpolation needed
+      ants = antsTarget.map(a => ({ ...a }));
+    } else {
+      // Map old ants by ID
+      const prevMap = {};
+      for (const a of antsPrev) prevMap[a.id] = a;
+
+      ants = antsTarget.map(a => {
+        const prev = prevMap[a.id];
+        if (prev) {
+          // Keep previous position, will interpolate to target
+          return { ...a, x: prev.x, y: prev.y, legT: prev.legT, antT: prev.antT, bodyBob: prev.bodyBob };
+        }
+        return { ...a }; // New ant, no interpolation
+      });
+    }
+    interpolateT = 0;
+
+    // Show narration from Claude
+    if (data.narration && data.narration !== lastNarration) {
+      lastNarration = data.narration;
+      showNarration(data.narration);
+    }
+
+    // Update status
+    document.getElementById('statusText').textContent = 'Live colony — Day ' + simDay;
+    lastFetchTime = Date.now();
+
+  } catch (err) {
+    console.error('Fetch error:', err);
+    document.getElementById('statusText').textContent = 'Reconnecting...';
   }
 }
 
-function initTerrain() {
-  grid = new Uint8Array(COLS * ROWS);
-  phTrail = new Float32Array(COLS * ROWS);
-  phFood = new Float32Array(COLS * ROWS);
-  phDig = new Float32Array(COLS * ROWS);
-
-  for (let y = 0; y < ROWS; y++) {
-    for (let x = 0; x < COLS; x++) {
-      if (y < SURFACE) { grid[y * COLS + x] = 0; continue; }
-      const d = (y - SURFACE) / (ROWS - SURFACE);
-      const n = fbm(x * 0.04, y * 0.04) - 0.4;
-      // Softer terrain — mostly 1-3, only deepest areas reach 4
-      grid[y * COLS + x] = Math.max(1, Math.min(4, Math.round(1 + d * 2.5 + n * 1.0)));
-    }
-  }
-  // Rocks — just a few small ones
-  for (let k = 0; k < 4; k++) {
-    const cx = (Math.random() * (COLS - 14) + 7) | 0;
-    const cy = (Math.random() * (ROWS - SURFACE - 20) + SURFACE + 14) | 0;
-    const r = 2 + (Math.random() * 3) | 0;
-    for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
-      if (dx * dx + dy * dy <= r * r) {
-        const nx = cx + dx, ny = cy + dy;
-        if (nx >= 0 && nx < COLS && ny >= SURFACE && ny < ROWS) grid[ny * COLS + nx] = 5;
-      }
-    }
-  }
-  terrainDirty = true;
+function showNarration(text) {
+  const el = document.getElementById('aiThought');
+  document.getElementById('aiText').textContent = text;
+  el.classList.add('show');
+  clearTimeout(narrationTimeout);
+  narrationTimeout = setTimeout(() => el.classList.remove('show'), 12000);
 }
 
-function cellAt(x, y) { return (x < 0 || x >= COLS || y < 0 || y >= ROWS) ? 255 : grid[y * COLS + x]; }
+// ═══════════════════════════════════════════════════════════════════
+//  INTERPOLATION — Smooth ant movement between server snapshots
+// ═══════════════════════════════════════════════════════════════════
+
+function interpolateAnts() {
+  interpolateT = Math.min(1, interpolateT + INTERP_SPEED);
+  const t = interpolateT;
+
+  for (let i = 0; i < ants.length; i++) {
+    const ant = ants[i];
+    const target = antsTarget.find(a => a.id === ant.id);
+    if (!target) continue;
+
+    // Smooth position interpolation
+    ant.x += (target.x - ant.x) * 0.08;
+    ant.y += (target.y - ant.y) * 0.08;
+
+    // Copy non-position state directly
+    ant.state = target.state;
+    ant.role = target.role;
+    ant.carrying = target.carrying;
+    ant.carryingSand = target.carryingSand;
+    ant.isPaused = target.isPaused;
+    ant.antennateTimer = target.antennateTimer;
+    ant.lastThought = target.lastThought;
+    ant.energy = target.energy;
+
+    // Animate legs/antenna continuously for visual fidelity
+    const moving = Math.hypot(target.vx, target.vy) > 0.08;
+    if (moving) {
+      ant.legT += 0.35;
+      ant.antT += 0.08;
+      ant.bodyBob = Math.sin(ant.legT * 0.4) * 0.3;
+    }
+    ant.vx = target.vx;
+    ant.vy = target.vy;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  TERRAIN HELPERS
+// ═══════════════════════════════════════════════════════════════════
+
+function cellAt(x, y) {
+  return (x < 0 || x >= COLS || y < 0 || y >= ROWS) ? 255 : grid[y * COLS + x];
+}
+
 function isSolid(x, y) { return cellAt(x, y) > 0; }
 
-// Sand displacement: dig always returns 1 when material is removed
-// Every dig action produces a grain the ant must carry out
-function digCell(x, y) {
-  if (x < 0 || x >= COLS || y < 0 || y >= ROWS) return 0;
-  const i = y * COLS + x;
-  if (!grid[i]) return 0;
-  if (grid[i] <= 1) { grid[i] = 0; totalDug++; terrainDirty = true; return 1; }
-  grid[i]--; terrainDirty = true; return 1; // always return 1 — every chip produces a grain
-}
-
-// Deposit sand on surface — builds mounds around tunnel entrances
-function depositSandOnSurface(gx) {
-  // Find the highest open cell near the surface
-  let depositY = SURFACE;
-  for (let y = Math.max(0, SURFACE - 10); y < Math.min(ROWS, SURFACE + 5); y++) {
-    if (isSolid(gx, y)) { depositY = y - 1; break; }
-  }
-  if (depositY < 2) return;
-  // 82% stays put, 18% rolls sideways (research-backed)
-  let nx = gx;
-  if (Math.random() > 0.82) {
-    nx += Math.random() < 0.5 ? -1 : 1;
-    nx = Math.max(1, Math.min(COLS - 2, nx));
-  }
-  if (depositY >= 0 && depositY < ROWS && !isSolid(nx, depositY)) {
-    grid[depositY * COLS + nx] = 1;
-    terrainDirty = true;
-  }
-}
-
-// Smooth SDF-like air fraction for edge blending
 function airFraction(gx, gy) {
   let air = 0, total = 0;
   for (let dy = -1; dy <= 1; dy++) {
@@ -460,1212 +354,9 @@ function airFraction(gx, gy) {
   return air / total;
 }
 
-function gravity() {
-  for (let y = ROWS - 2; y >= SURFACE; y--) {
-    for (let x = 0; x < COLS; x++) {
-      const v = grid[y * COLS + x];
-      if (!v || v > 2) continue;
-      if (!cellAt(x, y + 1)) {
-        grid[(y + 1) * COLS + x] = v; grid[y * COLS + x] = 0; terrainDirty = true;
-      } else {
-        const cl = !cellAt(x - 1, y + 1) && !cellAt(x - 1, y);
-        const cr = !cellAt(x + 1, y + 1) && !cellAt(x + 1, y);
-        if (cl && cr) {
-          const d = Math.random() < 0.5 ? -1 : 1;
-          grid[(y + 1) * COLS + (x + d)] = v; grid[y * COLS + x] = 0; terrainDirty = true;
-        } else if (cl) {
-          grid[(y + 1) * COLS + (x - 1)] = v; grid[y * COLS + x] = 0; terrainDirty = true;
-        } else if (cr) {
-          grid[(y + 1) * COLS + (x + 1)] = v; grid[y * COLS + x] = 0; terrainDirty = true;
-        }
-      }
-    }
-  }
-}
-
 // ═══════════════════════════════════════════════════════════════════
-//  PHEROMONES
+//  PARTICLES — Visual-only decorative particles
 // ═══════════════════════════════════════════════════════════════════
-
-function phSet(x, y, v, m) { if (x >= 0 && x < COLS && y >= 0 && y < ROWS) m[y * COLS + x] = Math.min(1.5, m[y * COLS + x] + v); }
-function phGet(x, y, m) { return (x >= 0 && x < COLS && y >= 0 && y < ROWS) ? m[y * COLS + x] : 0; }
-
-function phDecay() {
-  for (let i = 0; i < phTrail.length; i++) {
-    phTrail[i] *= 0.993; phFood[i] *= 0.996; phDig[i] *= 0.99;
-    if (phTrail[i] < 0.003) phTrail[i] = 0;
-    if (phFood[i] < 0.003) phFood[i] = 0;
-    if (phDig[i] < 0.003) phDig[i] = 0;
-  }
-}
-
-function phGradient(gx, gy, map, radius) {
-  let bestVal = phGet(gx, gy, map);
-  let bestAngle = null;
-  const r = radius || 5;
-  for (let a = 0; a < 6.28; a += 0.524) {
-    const cx = gx + Math.round(Math.cos(a) * r);
-    const cy = gy + Math.round(Math.sin(a) * r);
-    const v = phGet(cx, cy, map);
-    if (v > bestVal + 0.01) { bestVal = v; bestAngle = a; }
-  }
-  return { angle: bestAngle, strength: bestVal };
-}
-
-// ═══════════════════════════════════════════════════════════════════
-//  CHAMBERS
-// ═══════════════════════════════════════════════════════════════════
-
-function detectChambers() {
-  chambers = [];
-  const vis = new Uint8Array(COLS * ROWS);
-  for (let y = SURFACE + 5; y < ROWS; y++) {
-    for (let x = 0; x < COLS; x++) {
-      const i = y * COLS + x;
-      if (!grid[i] && !vis[i]) {
-        let n = 0, sx = 0, sy = 0;
-        const q = [[x, y]]; vis[i] = 1;
-        while (q.length && n < 1200) {
-          const [cx, cy] = q.pop(); n++; sx += cx; sy += cy;
-          for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-            const nx = cx + dx, ny = cy + dy;
-            if (nx >= 0 && nx < COLS && ny >= SURFACE && ny < ROWS) {
-              const ni = ny * COLS + nx;
-              if (!grid[ni] && !vis[ni]) { vis[ni] = 1; q.push([nx, ny]); }
-            }
-          }
-        }
-        if (n >= 40) chambers.push({ x: (sx / n) * CELL, y: (sy / n) * CELL, size: n });
-      }
-    }
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════
-//  AI AWARENESS SYSTEM
-//  Every ~60 seconds, ants gain situational awareness — they assess
-//  their environment and make intelligent decisions
-// ═══════════════════════════════════════════════════════════════════
-
-const AI_INTERVAL = 600; // 10s at 60fps — much more responsive
-let lastAITick = 0;
-
-function aiAwarenessPass() {
-  // Update tunnel plan frontier
-  if (tunnelPlan.initialized) tunnelPlan._updateFrontier();
-
-  // Colony-level assessment
-  const diggerCount = ants.filter(a => a.role === 'digger').length;
-  const foragerCount = ants.filter(a => a.role === 'forager').length;
-  const totalAnts = ants.length;
-  const foodAvail = foods.reduce((s, f) => s + f.amount, 0);
-  const tunnelPct = totalDug / ((ROWS - SURFACE) * COLS);
-
-  // Each ant gets a moment of awareness
-  for (const ant of ants) {
-    if (ant.isQueen || ant.state === ST.REST) continue;
-
-    const gx = ant.gx(), gy = ant.gy();
-    const depth = ant.depthR();
-    const atSurface = ant.atSurface();
-    const nearbyDiggers = ants.filter(a => a !== ant && a.role === 'digger' && Math.hypot(a.x - ant.x, a.y - ant.y) < 40).length;
-
-    let thought = '';
-    let action = null;
-
-    // INTELLIGENCE: Get a dig assignment from the tunnel plan
-    if (ant.role === 'digger' && nearbyDiggers > 3) {
-      // Too crowded — get a new assignment from the plan
-      const assignment = tunnelPlan.getDigAssignment(gx, gy);
-      if (assignment) {
-        ant.digTargetX = assignment.gx;
-        ant.digTargetY = assignment.gy;
-        ant.digAngle = assignment.angle;
-        ant.assignedType = assignment.type;
-        action = 'reassign';
-        thought = 'Too crowded, moving to extend ' + assignment.type;
-      } else {
-        action = 'explore';
-        thought = 'Too crowded here, exploring new areas';
-      }
-    }
-    // Colony needs more diggers
-    else if (diggerCount < totalAnts * 0.4 && tunnelPct < 0.2 && ant.role === 'idle') {
-      const assignment = tunnelPlan.getDigAssignment(gx, gy);
-      if (assignment) {
-        ant.digTargetX = assignment.gx;
-        ant.digTargetY = assignment.gy;
-        ant.digAngle = assignment.angle;
-        ant.assignedType = assignment.type;
-        action = 'dig';
-        thought = 'Colony needs tunnels, assigned to ' + assignment.type;
-      } else {
-        action = 'dig';
-        thought = 'Colony needs more tunnels, I should dig';
-      }
-    }
-    // Food available
-    else if (foodAvail > 0 && foragerCount < 2 && ant.role !== 'forager') {
-      action = 'forage';
-      thought = 'Food spotted but few foragers, I should help';
-    }
-    // Deep and tired
-    else if (depth > 0.6 && ant.energy < 300) {
-      action = 'return';
-      thought = 'Getting tired this deep, heading back up';
-    }
-    // Stuck
-    else if (ant.stuck > 15) {
-      action = 'unstick';
-      thought = 'Stuck in a dead end, finding another way';
-    }
-    // Idle too long — get a dig assignment
-    else if (ant.role === 'idle' && ant.patience > 100) {
-      const assignment = tunnelPlan.getDigAssignment(gx, gy);
-      if (assignment && tunnelPct < 0.3) {
-        ant.digTargetX = assignment.gx;
-        ant.digTargetY = assignment.gy;
-        ant.digAngle = assignment.angle;
-        ant.assignedType = assignment.type;
-        action = 'dig';
-        thought = 'Time to help dig the ' + assignment.type;
-      } else {
-        action = 'explore';
-        thought = 'Curious about what is down there';
-      }
-    }
-    // Tandem teaching
-    else if (ant.experience > 500 && !ant.tandemTarget) {
-      const naive = ants.find(a => a !== ant && a.experience < 100 && Math.hypot(a.x - ant.x, a.y - ant.y) < 30 && !a.tandemLeader);
-      if (naive) {
-        ant.tandemTarget = naive;
-        naive.tandemLeader = ant;
-        thought = 'Leading ' + naive.name.split('-')[0] + ' to the dig site';
-        action = 'tandem';
-      }
-    }
-
-    // Apply the decision
-    if (action === 'dig' || action === 'reassign') {
-      ant.role = 'digger';
-      if (atSurface) {
-        ant.state = ST.ENTER;
-        const entrance = tunnelPlan.nearestEntrance(gx);
-        ant.targetX = entrance ? entrance.gx * CELL : tunnelPlan.mainShaftX * CELL;
-      } else if (ant.digTargetX && ant.digTargetY) {
-        // Navigate to the assignment
-        ant.state = ST.DIG_TO_TARGET;
-      } else {
-        ant.state = ST.DIG_DOWN;
-      }
-    } else if (action === 'explore') {
-      ant.role = 'explorer';
-      ant.state = ST.EXPLORE;
-    } else if (action === 'forage') {
-      ant.role = 'forager';
-      ant.state = ST.FORAGE;
-    } else if (action === 'return') {
-      ant.state = ST.GO_UP;
-    } else if (action === 'unstick') {
-      ant._unstick(gx, gy);
-    }
-
-    ant.lastThought = thought || ant.lastThought;
-    ant.lastThoughtTime = thought ? frame : ant.lastThoughtTime;
-  }
-
-  // Show a random ant's thought bubble
-  const thinkingAnts = ants.filter(a => a.lastThought && frame - a.lastThoughtTime < 60);
-  if (thinkingAnts.length > 0) {
-    const ant = thinkingAnts[(Math.random() * thinkingAnts.length) | 0];
-    showAIThought(ant.name, ant.lastThought);
-  }
-}
-
-function showAIThought(name, text) {
-  const el = document.getElementById('aiThought');
-  document.getElementById('aiName').textContent = name;
-  document.getElementById('aiText').textContent = text;
-  el.classList.add('show');
-  clearTimeout(el._t);
-  el._t = setTimeout(() => el.classList.remove('show'), 5000);
-}
-
-// ═══════════════════════════════════════════════════════════════════
-//  ANT AGENT — Research-based emergent behavior with sand carrying
-// ═══════════════════════════════════════════════════════════════════
-
-const ST = {
-  WANDER: 0, ENTER: 1, DIG_DOWN: 2, DIG_BRANCH: 3, DIG_CHAMBER: 4,
-  EXPLORE: 5, GO_UP: 6, FORAGE: 7, CARRY: 8, REST: 9, WALL_FOLLOW: 10,
-  HAUL_SAND: 11, TANDEM_LEAD: 12, TANDEM_FOLLOW: 13, ANTENNATE: 14, PAUSE: 15,
-  DIG_TO_TARGET: 16
-};
-const ST_NAMES = [
-  'Wandering', 'Entering', 'Digging down', 'Branching', 'Carving chamber',
-  'Exploring', 'Returning', 'Foraging', 'Carrying food', 'Resting', 'Wall following',
-  'Hauling sand', 'Leading', 'Following', 'Communicating', 'Pausing', 'Navigating to dig site'
-];
-
-let nextId = 1;
-
-// Research-backed speed:
-// Harvester ant: 2cm/s unloaded = 48px/s = 0.8px/frame
-// Loaded: 30-50% slower = 0.4-0.56px/frame
-// Tunnel speed: same as surface
-const BASE_SPEED = 0.8;  // 2cm/s in px/frame at 60fps
-const LOADED_SPEED = 0.45; // ~44% reduction when carrying (research: 30-50%)
-const TANDEM_SPEED = 0.2; // 25% of normal (research-backed)
-
-class Ant {
-  constructor(x, y, isQueen) {
-    this.id = nextId++;
-    this.x = x; this.y = y; this.px = x; this.py = y;
-    this.vx = 0; this.vy = 0;
-    this.state = ST.WANDER;
-    this.energy = 900 + Math.random() * 200;
-    this.carrying = false;
-    this.carryingSand = 0; // grains of sand being hauled to surface
-    this.maxSandCarry = 3 + Math.floor(Math.random() * 3); // carry 3-5 grains then haul
-    this.isQueen = isQueen || false;
-    this.age = 0; this.stuck = 0; this.digCD = 0;
-    this.patience = 0;
-    this.digCount = 0;
-    this.experience = 0; // accumulated knowledge for tandem running
-
-    // Correlated random walk
-    this.heading = Math.random() * 6.28;
-    this.digAngle = Math.PI * 0.5;
-    this.targetX = -1; this.targetY = -1;
-
-    // Meandering: real ants meander left-right with ~3 body-length wavelength
-    this.meanderPhase = Math.random() * 6.28;
-    this.meanderFreq = 0.08 + Math.random() * 0.04; // ~3 BL wavelength
-
-    // Strobing/pause behavior: ants pause ~43% of time at 5-7Hz bursts
-    this.pauseTimer = 0;
-    this.pauseDuration = 0;
-    this.nextPauseAt = 8 + Math.random() * 12; // frames between pauses
-    this.isPaused = false;
-
-    // Rest cycle: ~250 naps/day
-    this.restTimer = 0;
-    this.nextRestAt = 180 + Math.random() * 220;
-    this.restDuration = 35 + Math.random() * 45;
-    this.timeSinceRest = 0;
-
-    // Self-organized role allocation via response thresholds
-    this.threshold = {
-      dig: 0.1 + Math.random() * 0.8,
-      forage: 0.1 + Math.random() * 0.8,
-      explore: 0.1 + Math.random() * 0.8,
-    };
-
-    this.role = 'idle';
-    this.memory = [];
-    this.memoryTimer = 0;
-
-    // Tandem running
-    this.tandemTarget = null; // ant I'm leading
-    this.tandemLeader = null; // ant leading me
-
-    // Antennation
-    this.antennateTimer = 0;
-    this.antennateTarget = null;
-
-    // AI awareness
-    this.lastThought = '';
-    this.lastThoughtTime = 0;
-
-    // Intelligent digging — assigned dig targets from colony tunnel plan
-    this.digTargetX = -1;
-    this.digTargetY = -1;
-    this.assignedType = ''; // 'shaft', 'gallery', 'chamber'
-
-    // Vertical body oscillation (sinusoidal for unloaded, jerky for loaded)
-    this.bodyBob = 0;
-    this.bodyBobPhase = Math.random() * 6.28;
-
-    const names = ['Ada', 'Bo', 'Cal', 'Dee', 'Emi', 'Fay', 'Gil', 'Hal', 'Ira', 'Joy', 'Kai', 'Leo', 'Mae', 'Neo', 'Ora', 'Pip', 'Quinn', 'Rex', 'Sol', 'Tia', 'Uma', 'Val', 'Wren', 'Xia', 'Yui', 'Zoe'];
-    this.name = (isQueen ? 'Queen ' : '') + names[this.id % names.length] + '-' + this.id;
-
-    this.size = isQueen ? 4.5 : 3.0 + Math.random() * 0.5;
-    this.hue = Math.random() * 15;
-    this.legT = Math.random() * 6.28;
-    this.antT = Math.random() * 6.28;
-  }
-
-  gx() { return (this.x / CELL) | 0; }
-  gy() { return (this.y / CELL) | 0; }
-  depthR() { return Math.max(0, (this.gy() - SURFACE) / (ROWS - SURFACE)); }
-  atSurface() { return this.gy() <= SURFACE + 2; }
-  currentSpeed() {
-    if (this.isPaused) return 0.05; // still creep slightly during micro-pause
-    if (this.state === ST.TANDEM_LEAD) return TANDEM_SPEED;
-    return (this.carrying || this.carryingSand > 0) ? LOADED_SPEED : BASE_SPEED;
-  }
-
-  sense() {
-    const gx = this.gx(), gy = this.gy();
-    const s = {
-      gx, gy,
-      surface: this.atSurface(),
-      depth: this.depthR(),
-      below: isSolid(gx, gy + 1), above: isSolid(gx, gy - 1),
-      left: isSolid(gx - 1, gy), right: isSolid(gx + 1, gy),
-      food: null, foodDist: 999,
-      trailGrad: phGradient(gx, gy, phTrail, 6),
-      foodGrad: phGradient(gx, gy, phFood, 6),
-      digGrad: phGradient(gx, gy, phDig, 5),
-      trailHere: phGet(gx, gy, phTrail),
-      foodHere: phGet(gx, gy, phFood),
-      digHere: phGet(gx, gy, phDig),
-      nearAnts: 0, nearDiggers: 0, nearForagers: 0,
-      wallDir: null,
-    };
-
-    for (const f of foods) {
-      const d = Math.hypot(f.x - this.x, f.y - this.y);
-      if (d < 60 && d < s.foodDist) { s.food = f; s.foodDist = d; }
-    }
-
-    for (const a of ants) {
-      if (a === this) continue;
-      const dist = Math.hypot(a.x - this.x, a.y - this.y);
-      if (dist < 25) {
-        s.nearAnts++;
-        if (a.role === 'digger') s.nearDiggers++;
-        if (a.role === 'forager') s.nearForagers++;
-      }
-      // Antennation: within 1 body length
-      if (dist < ANT_BODY_PX && this.antennateTimer <= 0 && Math.random() < 0.01) {
-        this.antennateTarget = a;
-        this.antennateTimer = 30; // ~0.5 seconds
-      }
-    }
-
-    if (!s.surface) {
-      const wallL = isSolid(gx - 1, gy) ? 1 : 0;
-      const wallR = isSolid(gx + 1, gy) ? 1 : 0;
-      const wallU = isSolid(gx, gy - 1) ? 1 : 0;
-      const wallD = isSolid(gx, gy + 1) ? 1 : 0;
-      if (wallL + wallR + wallU + wallD > 0 && wallL + wallR + wallU + wallD < 4) {
-        s.wallDir = { l: wallL, r: wallR, u: wallU, d: wallD };
-      }
-    }
-
-    return s;
-  }
-
-  think(s) {
-    this.timeSinceRest++;
-
-    // Antennation interaction
-    if (this.antennateTimer > 0) {
-      this.antennateTimer--;
-      if (this.antennateTarget && this.antennateTimer > 20) {
-        // Exchange information: share knowledge of food/dig sites
-        const other = this.antennateTarget;
-        if (this.carrying && other.threshold.forage > 0.5) {
-          other.threshold.forage *= 0.8; // encourage foraging
-        }
-        if (this.role === 'digger' && other.role === 'idle') {
-          other.threshold.dig *= 0.85; // recruit digger
-        }
-      }
-      if (this.antennateTimer <= 0) this.antennateTarget = null;
-    }
-
-    // Brief micro-pauses — much less frequent so ants feel alive
-    if (!this.isPaused && this.state !== ST.REST) {
-      this.pauseTimer++;
-      if (this.pauseTimer >= this.nextPauseAt) {
-        this.isPaused = true;
-        this.pauseDuration = 1 + Math.random() * 2; // 1-3 frames (very brief)
-        this.pauseTimer = 0;
-        this.nextPauseAt = 40 + Math.random() * 60; // pause every 40-100 frames
-      }
-    }
-    if (this.isPaused) {
-      this.pauseDuration--;
-      if (this.pauseDuration <= 0) this.isPaused = false;
-      // Don't return — still think, just don't move
-    }
-
-    // Rest cycle
-    if (this.timeSinceRest > this.nextRestAt && this.state !== ST.CARRY && this.state !== ST.HAUL_SAND && this.state !== ST.DIG_TO_TARGET) {
-      this.state = ST.REST;
-      this.restTimer = 0;
-      this.timeSinceRest = 0;
-      this.nextRestAt = 180 + Math.random() * 220;
-      return;
-    }
-    if (this.state === ST.REST) {
-      this.restTimer++;
-      this.energy += 0.6;
-      if (this.restTimer > this.restDuration) {
-        this.restTimer = 0;
-        this.state = ST.WANDER;
-      }
-      return;
-    }
-
-    if (this.energy < 50) { this.state = ST.REST; this.restTimer = 0; return; }
-    if (this.isQueen) { this.state = ST.WANDER; return; }
-
-    // Carrying food → return
-    if (this.carrying) { this.state = ST.CARRY; return; }
-
-    // Hauling sand → return to surface to deposit
-    if (this.carryingSand > 0) { this.state = ST.HAUL_SAND; return; }
-
-    // Tandem running: if I'm leading, continue leading
-    if (this.tandemTarget) {
-      const dist = Math.hypot(this.tandemTarget.x - this.x, this.tandemTarget.y - this.y);
-      if (dist > 80 || this.tandemTarget.energy < 50) {
-        // Lost follower
-        this.tandemTarget.tandemLeader = null;
-        this.tandemTarget = null;
-      } else {
-        this.state = ST.TANDEM_LEAD;
-        return;
-      }
-    }
-    // If I'm following, keep following
-    if (this.tandemLeader) {
-      if (Math.hypot(this.tandemLeader.x - this.x, this.tandemLeader.y - this.y) > 80) {
-        this.tandemLeader.tandemTarget = null;
-        this.tandemLeader = null;
-      } else {
-        this.state = ST.TANDEM_FOLLOW;
-        return;
-      }
-    }
-
-    // Utility-based decision making
-    let scores = { dig: 0, forage: 0, explore: 0, rest: 0, wander: 0 };
-
-    const digStim = s.digHere + (s.digGrad.strength * 0.5);
-    if (digStim > this.threshold.dig) {
-      scores.dig = (digStim - this.threshold.dig) * 3;
-      scores.dig *= Math.max(0.1, 1 - s.nearDiggers * 0.25);
-    }
-
-    const foodStim = s.foodHere + (s.food ? 0.5 : 0) + s.foodGrad.strength * 0.3;
-    if (foodStim > this.threshold.forage) {
-      scores.forage = (foodStim - this.threshold.forage) * 4;
-      scores.forage *= Math.max(0.1, 1 - s.nearForagers * 0.2);
-    }
-
-    const exploreStim = s.trailGrad.strength * 0.3 + (1 - s.depth) * 0.2;
-    if (exploreStim > this.threshold.explore * 0.5) {
-      scores.explore = exploreStim * 2;
-    }
-
-    if (s.surface) scores.wander = 0.5;
-
-    let best = 'wander', bestScore = scores.wander;
-    for (const [action, score] of Object.entries(scores)) {
-      if (score > bestScore) { bestScore = score; best = action; }
-    }
-
-    // On surface
-    if (s.surface) {
-      if (best === 'forage' && s.food) {
-        this.state = ST.FORAGE; this.targetX = s.food.x; this.targetY = s.food.y;
-        this.role = 'forager'; return;
-      }
-      if (best === 'forage' && s.foodGrad.angle !== null) {
-        this.state = ST.FORAGE; this.heading = s.foodGrad.angle;
-        this.role = 'forager'; return;
-      }
-
-      this.patience++;
-      const threshold = 80 + (1 - scores.dig) * 120;
-      if (this.patience > threshold || best === 'dig') {
-        this.patience = 0;
-        this.role = 'digger';
-
-        // INTELLIGENCE: Always use the colony tunnel plan
-        if (!tunnelPlan.initialized) tunnelPlan.init();
-
-        // Get dig assignment from colony plan
-        const assignment = tunnelPlan.getDigAssignment(this.gx(), this.gy());
-        if (assignment) {
-          this.digTargetX = assignment.gx;
-          this.digTargetY = assignment.gy;
-          this.digAngle = assignment.angle;
-          this.assignedType = assignment.type;
-        }
-
-        // Always use an established entrance (virtually 100%)
-        const entrance = tunnelPlan.nearestEntrance(this.gx());
-        if (entrance) {
-          this.targetX = entrance.gx * CELL;
-          this.state = ST.ENTER;
-        } else {
-          // Fallback: start the main shaft (only first ant ever does this)
-          this.state = ST.DIG_DOWN;
-          this.digCount = 0;
-          this.digAngle = Math.PI * 0.5;
-          tunnelPlan.entrances.push({ gx: this.gx(), depth: 0 });
-        }
-        return;
-      }
-
-      this.state = ST.WANDER; this.role = 'idle';
-      return;
-    }
-
-    // Underground — DIG_TO_TARGET: navigate through tunnels toward assigned dig site
-    if (this.state === ST.DIG_TO_TARGET) {
-      if (this.digCount >= this.maxSandCarry) {
-        this.carryingSand = this.digCount;
-        this.digCount = 0;
-        this.state = ST.HAUL_SAND;
-        return;
-      }
-      // Navigate toward target
-      if (this.digTargetX > 0 && this.digTargetY > 0) {
-        const tdx = this.digTargetX - s.gx, tdy = this.digTargetY - s.gy;
-        const tdist = Math.hypot(tdx, tdy);
-        if (tdist < 4) {
-          // Arrived at target — start digging in the assigned direction
-          if (this.assignedType === 'shaft') {
-            this.state = ST.DIG_DOWN;
-            this.digAngle = Math.PI * 0.5;
-          } else if (this.assignedType === 'chamber') {
-            this.state = ST.DIG_CHAMBER;
-            this.patience = 0;
-          } else {
-            this.state = ST.DIG_BRANCH;
-            this.digAngle = this.digAngle || (Math.random() < 0.5 ? 0 : Math.PI);
-          }
-          this.digTargetX = -1;
-          this.digTargetY = -1;
-          return;
-        }
-        // Navigate: prefer open paths, dig if blocked
-        this.digAngle = Math.atan2(tdy, tdx);
-        this.heading = this.digAngle;
-      }
-      return;
-    }
-
-    // Underground — structured digging using tunnel plan
-    if (this.state === ST.DIG_DOWN || this.state === ST.DIG_BRANCH || this.state === ST.DIG_CHAMBER) {
-      // Check if we need to haul sand to surface
-      if (this.digCount >= this.maxSandCarry) {
-        this.carryingSand = this.digCount;
-        this.digCount = 0;
-        this.state = ST.HAUL_SAND;
-        return;
-      }
-
-      // DIG_DOWN (shaft) — transitions to gallery at planned intervals
-      if (this.state === ST.DIG_DOWN) {
-        const galleryInterval = Math.round((ROWS - SURFACE) * 0.15);
-        const depthInGround = s.gy - SURFACE;
-        // At gallery depth? Branch horizontally
-        if (depthInGround > 5 && depthInGround % galleryInterval < 2 && Math.random() < 0.08) {
-          this.state = ST.DIG_BRANCH;
-          this.digAngle = Math.random() < 0.5 ? 0 : Math.PI; // left or right
-          this.digAngle += (Math.random() - 0.5) * 0.15; // slight slope
-          return;
-        }
-        // Deep enough? Sometimes start a chamber or go explore
-        if (s.depth > 0.7 && Math.random() < 0.02) {
-          this.state = Math.random() < 0.3 ? ST.DIG_CHAMBER : ST.GO_UP;
-          this.patience = 0;
-          return;
-        }
-        // Keep shaft nearly vertical — very tight angle
-        if (Math.random() < 0.01) {
-          this.digAngle += (Math.random() - 0.5) * 0.08;
-        }
-        // Strong clamp to vertical
-        this.digAngle = this.digAngle * 0.92 + (Math.PI * 0.5) * 0.08;
-        return;
-      }
-
-      // DIG_BRANCH (gallery) — horizontal tunnel with slight curves
-      if (this.state === ST.DIG_BRANCH) {
-        // Piecewise linear: slight direction changes
-        if (Math.random() < 0.006) this.digAngle += (Math.random() - 0.5) * 0.3;
-        // Keep galleries mostly horizontal — clamp toward 0 or PI
-        const nearestH = Math.abs(this.digAngle) < Math.PI * 0.5 ? 0 : Math.PI;
-        this.digAngle = this.digAngle * 0.95 + nearestH * 0.05;
-        // End gallery after enough length, or start a chamber
-        if (Math.random() < 0.004) {
-          if (Math.random() < 0.4) {
-            this.state = ST.DIG_CHAMBER;
-            this.patience = 0;
-          } else {
-            this.state = Math.random() < 0.5 ? ST.GO_UP : ST.EXPLORE;
-          }
-        }
-        return;
-      }
-
-      // DIG_CHAMBER — carve out a wider area
-      if (this.state === ST.DIG_CHAMBER) {
-        this.patience++;
-        const maxSize = 100 - s.depth * 40;
-        if (this.patience > maxSize) {
-          this.state = Math.random() < 0.4 ? ST.GO_UP : ST.EXPLORE;
-          this.patience = 0;
-          phSet(s.gx, s.gy, 0.8, phDig);
-        }
-        return;
-      }
-      return;
-    }
-
-    if (this.state === ST.EXPLORE || this.state === ST.WALL_FOLLOW) {
-      if (s.wallDir) this.state = ST.WALL_FOLLOW;
-      else this.state = ST.EXPLORE;
-
-      if (s.trailGrad.angle !== null && s.trailGrad.strength > 0.05) {
-        this.heading = this.heading * 0.7 + s.trailGrad.angle * 0.3;
-      }
-      // Follow dig pheromones toward active dig sites (structured)
-      if (s.digGrad.angle !== null && s.digGrad.strength > this.threshold.dig) {
-        // Get a proper assignment from the tunnel plan instead of random digging
-        const assignment = tunnelPlan.getDigAssignment(s.gx, s.gy);
-        if (assignment) {
-          this.digTargetX = assignment.gx;
-          this.digTargetY = assignment.gy;
-          this.digAngle = assignment.angle;
-          this.assignedType = assignment.type;
-          this.state = ST.DIG_TO_TARGET;
-        } else {
-          this.state = ST.DIG_BRANCH;
-          this.digAngle = s.digGrad.angle;
-        }
-        this.role = 'digger';
-        return;
-      }
-      // Occasionally decide to go up or get a new dig assignment
-      if (Math.random() < 0.003) {
-        if (scores.dig > 0.3) {
-          const assignment = tunnelPlan.getDigAssignment(s.gx, s.gy);
-          if (assignment) {
-            this.digTargetX = assignment.gx;
-            this.digTargetY = assignment.gy;
-            this.digAngle = assignment.angle;
-            this.assignedType = assignment.type;
-            this.state = ST.DIG_TO_TARGET;
-            this.role = 'digger';
-          } else {
-            this.state = ST.GO_UP;
-          }
-        } else {
-          this.state = ST.GO_UP;
-        }
-      }
-      return;
-    }
-
-    if (this.state === ST.GO_UP || this.state === ST.CARRY || this.state === ST.HAUL_SAND) {
-      if (s.surface) {
-        if (this.carryingSand > 0) {
-          // Deposit sand on surface near entrance, building a visible mound
-          for (let i = 0; i < this.carryingSand; i++) {
-            depositSandOnSurface(this.gx() + Math.round((Math.random() - 0.5) * 3));
-          }
-          this.carryingSand = 0;
-          // Spawn visible sand-colored particles to show the deposit
-          for (let i = 0; i < 6; i++) {
-            particles.push({
-              x: this.x + (Math.random() - 0.5) * 8,
-              y: this.y - 2,
-              vx: (Math.random() - 0.5) * 1.5,
-              vy: -Math.random() * 0.8 - 0.1,
-              life: 30 + Math.random() * 20,
-              size: 1.5 + Math.random() * 1.5,
-              r: SAND_R, g: SAND_G, b: SAND_B
-            });
-          }
-        }
-        this.state = ST.WANDER; this.patience = 0;
-        if (this.carrying) this.carrying = false;
-        this.role = 'idle';
-      }
-      return;
-    }
-
-    this.state = ST.EXPLORE;
-  }
-
-  act(s) {
-    this.age++;
-    this.experience++;
-    this.energy -= 0.1;
-    const moving = this.state !== ST.REST && !this.isPaused;
-    this.legT += moving ? 0.22 : 0;
-    this.antT += 0.07;
-    if (this.digCD > 0) this.digCD--;
-
-    // Body oscillation: smooth sine for unloaded, irregular for loaded
-    if (moving) {
-      this.bodyBobPhase += 0.3;
-      if (this.carrying || this.carryingSand > 0) {
-        // Loaded: jerky/irregular
-        this.bodyBob = Math.sin(this.bodyBobPhase) * 0.4 + Math.sin(this.bodyBobPhase * 2.7) * 0.3;
-      } else {
-        // Unloaded: smooth sinusoidal
-        this.bodyBob = Math.sin(this.bodyBobPhase) * 0.3;
-      }
-    }
-
-    // Memory
-    this.memoryTimer++;
-    if (this.memoryTimer > 30) {
-      this.memory.push({ x: this.gx(), y: this.gy() });
-      if (this.memory.length > 8) this.memory.shift();
-      this.memoryTimer = 0;
-    }
-
-    // Pheromone deposition
-    const gx = s.gx, gy = s.gy;
-    if (this.carrying) {
-      phSet(gx, gy, 0.3, phFood);
-      phSet(gx, gy, 0.2, phTrail);
-    } else if (this.carryingSand > 0) {
-      phSet(gx, gy, 0.15, phTrail);
-    } else if (this.state === ST.DIG_DOWN || this.state === ST.DIG_BRANCH || this.state === ST.DIG_CHAMBER || this.state === ST.DIG_TO_TARGET) {
-      phSet(gx, gy, 0.25, phDig);
-      phSet(gx, gy, 0.15, phTrail);
-    } else {
-      phSet(gx, gy, 0.06, phTrail);
-    }
-
-    const spd = this.currentSpeed();
-
-    switch (this.state) {
-      case ST.WANDER: this._wander(s, spd); break;
-      case ST.ENTER: this._enter(s, spd); break;
-      case ST.DIG_DOWN: case ST.DIG_BRANCH: this._digTunnel(s, spd); break;
-      case ST.DIG_CHAMBER: this._digChamber(s, spd); break;
-      case ST.DIG_TO_TARGET: this._digToTarget(s, spd); break;
-      case ST.EXPLORE: this._explore(s, spd); break;
-      case ST.WALL_FOLLOW: this._wallFollow(s, spd); break;
-      case ST.GO_UP: case ST.CARRY: case ST.HAUL_SAND: this._goUp(s, spd); break;
-      case ST.FORAGE: this._forage(s, spd); break;
-      case ST.TANDEM_LEAD: this._tandemLead(s, spd); break;
-      case ST.TANDEM_FOLLOW: this._tandemFollow(s, spd); break;
-      case ST.REST: break;
-    }
-
-    // Food pickup
-    if (!this.carrying) {
-      for (let i = foods.length - 1; i >= 0; i--) {
-        if (Math.hypot(foods[i].x - this.x, foods[i].y - this.y) < CELL * 3) {
-          foods[i].amount--;
-          if (foods[i].amount <= 0) foods.splice(i, 1);
-          this.carrying = true;
-          this.energy = Math.min(1100, this.energy + 400);
-          this.state = ST.CARRY; this.role = 'forager'; break;
-        }
-      }
-    }
-    if (this.carrying && s.surface) { this.carrying = false; this.state = ST.WANDER; this.role = 'idle'; }
-
-    // Physics
-    if (!s.below && gy < ROWS - 1) this.vy += 0.2;
-    if ((s.left || s.right) && !s.below) this.vy *= 0.35;
-
-    const maxV = spd * 3;
-    this.vx = Math.max(-maxV, Math.min(maxV, this.vx));
-    this.vy = Math.max(-maxV, Math.min(maxV, this.vy));
-
-    this.px = this.x; this.py = this.y;
-    let nx = this.x + this.vx, ny = this.y + this.vy;
-    const ngx = (nx / CELL) | 0, ngy = (ny / CELL) | 0;
-
-    const digging = this.state === ST.DIG_DOWN || this.state === ST.DIG_BRANCH || this.state === ST.DIG_CHAMBER || this.state === ST.DIG_TO_TARGET;
-    if (isSolid(ngx, ngy) && !digging) {
-      if (!isSolid(s.gx, ngy)) { nx = this.x; this.vx *= 0.15; }
-      else if (!isSolid(ngx, s.gy)) { ny = this.y; this.vy *= 0.15; }
-      else { nx = this.x; ny = this.y; this.vx *= 0.05; this.vy *= 0.05; this.stuck++; }
-    } else this.stuck = 0;
-
-    if (this.stuck > 12) { this._unstick(s.gx, s.gy); this.stuck = 0; }
-
-    // Clamp to within the frame — ants cannot escape the ant farm
-    this.x = Math.max(FRAME + CELL, Math.min(W - FRAME - CELL, nx));
-    // Hard ceiling: ants cannot go above the surface area (no flying!)
-    const minY = SURFACE_PX - CELL * 5; // small margin above surface for walking
-    this.y = Math.max(minY, Math.min(H - FRAME * 2.5 - CELL, ny));
-    // If pushed above surface while not on surface, force back down
-    if (this.y < SURFACE_PX - CELL * 3 && !this.atSurface()) {
-      this.vy = Math.max(this.vy, 0.2);
-    }
-  }
-
-  // Correlated random walk with natural meandering
-  _correlatedWalk(spd, turnRange) {
-    const range = turnRange || 0.35; // ~20 degrees per step (research: 10-20°)
-    this.heading += (Math.random() - 0.5) * range;
-
-    // Natural meandering: left-right oscillation ~3 body-length wavelength
-    this.meanderPhase += this.meanderFreq;
-    const meander = Math.sin(this.meanderPhase) * 0.08;
-    this.heading += meander;
-
-    // Anti-backtrack
-    if (this.memory.length > 2) {
-      const last = this.memory[this.memory.length - 1];
-      const dx = this.gx() - last.x, dy = this.gy() - last.y;
-      if (Math.abs(dx) < 2 && Math.abs(dy) < 2) {
-        this.heading += (Math.random() - 0.5) * 2;
-      }
-    }
-
-    this.vx += Math.cos(this.heading) * spd * 0.45;
-    this.vy += Math.sin(this.heading) * spd * 0.45;
-  }
-
-  _wander(s, spd) {
-    this._correlatedWalk(spd, 0.4);
-    // Hard surface constraint — ants walk ON the surface, not above it
-    const surfY = SURFACE_PX - CELL;
-    if (this.y < surfY - CELL * 2) { this.vy += 0.5; this.y = Math.max(this.y, surfY - CELL * 4); }
-    if (this.y < surfY) this.vy += 0.2; // gentle push down to surface
-    if (this.y > surfY + CELL * 2) this.vy -= 0.15; // don't sink into dirt
-    // Keep within frame bounds
-    if (this.x < FRAME + CELL * 2) { this.vx += 0.3; this.heading = 0; }
-    if (this.x > W - FRAME - CELL * 2) { this.vx -= 0.3; this.heading = Math.PI; }
-    this.vx *= 0.92; this.vy *= 0.92;
-  }
-
-  _enter(s, spd) {
-    if (this.targetX >= 0) {
-      const dx = this.targetX - this.x;
-      if (Math.abs(dx) > CELL * 3) {
-        // Walk along surface toward entrance
-        this.vx += Math.sign(dx) * spd * 0.5;
-        this.heading = dx > 0 ? 0 : Math.PI;
-        // Keep on surface while walking to entrance
-        if (this.y < SURFACE_PX - CELL) this.vy += 0.2;
-      } else {
-        // At entrance — head DOWN into the main shaft first
-        this.vy += spd * 0.5;
-        this.heading = Math.PI * 0.5;
-        this.targetX = -1;
-
-        // INTELLIGENCE: If ant has a dig target, navigate toward it
-        if (this.digTargetX > 0 && this.digTargetY > 0) {
-          this.state = ST.DIG_TO_TARGET;
-        } else {
-          // Default: dig down the main shaft
-          this.state = ST.DIG_DOWN;
-          this.digAngle = Math.PI * 0.5;
-          this.digCount = 0;
-        }
-      }
-    }
-    this.vx *= 0.92; this.vy *= 0.92;
-  }
-
-  _digTunnel(s, spd) {
-    const isDrilling = this.state === ST.DIG_DOWN;
-
-    // Shaft digging: keep strongly vertical
-    if (isDrilling) {
-      this.digAngle = this.digAngle * 0.9 + (Math.PI * 0.5) * 0.1;
-    }
-
-    const dx = Math.cos(this.digAngle), dy = Math.sin(this.digAngle);
-    this.heading = this.digAngle;
-
-    this.vx += dx * spd * 0.12;
-    this.vy += dy * spd * 0.18;
-    this.vx *= 0.8; this.vy *= 0.8;
-
-    if (this.digCD <= 0) {
-      const fwdX = s.gx + Math.round(dx * 2), fwdY = s.gy + Math.round(dy * 2);
-      if (isSolid(fwdX, fwdY)) {
-        const hardness = cellAt(fwdX, fwdY);
-        if (hardness >= 5) {
-          // Rock — go around it
-          this.digAngle += (Math.random() - 0.5) * 0.8;
-          this.digCD = 10;
-        } else {
-          // Dig tunnel — wider for shafts (2 cells), narrow for galleries
-          const digRadius = isDrilling ? 1.5 : 1;
-          let dugCount = 0;
-          for (let ddx = -1; ddx <= 1; ddx++) for (let ddy = -1; ddy <= 1; ddy++) {
-            if (ddx * ddx + ddy * ddy <= digRadius * digRadius && dugCount < 3) {
-              const result = digCell(fwdX + ddx, fwdY + ddy);
-              if (result) { dugCount++; this.digCount++; }
-            }
-          }
-          this.digCD = 8 + (hardness * 2) + (Math.random() * 4) | 0;
-          this.energy -= 0.4;
-          phSet(s.gx, s.gy, 0.4, phDig);
-          if (dugCount > 0) {
-            spawnDirt(fwdX * CELL, fwdY * CELL);
-            // Notify tunnel plan of digging
-            tunnelPlan.notifyDig(fwdX, fwdY);
-          }
-        }
-      } else {
-        // Open space ahead — advance into it
-        this.vx += dx * spd * 0.3;
-        this.vy += dy * spd * 0.3;
-        this.digCD = 3;
-      }
-    }
-  }
-
-  _digChamber(s, spd) {
-    this.heading += 0.06 + Math.random() * 0.03;
-    this.vx += Math.cos(this.heading) * spd * 0.18;
-    this.vy += Math.sin(this.heading) * spd * 0.18;
-    this.vx *= 0.8; this.vy *= 0.8;
-
-    if (this.digCD <= 0) {
-      let dugCount = 0;
-      for (let ddx = -2; ddx <= 2; ddx++) for (let ddy = -2; ddy <= 2; ddy++) {
-        if (ddx * ddx + ddy * ddy <= 5 && Math.random() < 0.5 && dugCount < 4) {
-          const result = digCell(s.gx + ddx, s.gy + ddy);
-          if (result) { dugCount++; this.digCount++; }
-        }
-      }
-      this.digCD = 14 + (Math.random() * 10) | 0;
-      this.energy -= 0.35;
-      if (dugCount > 0) {
-        spawnDirt(this.x, this.y);
-        tunnelPlan.notifyDig(s.gx, s.gy);
-      }
-    }
-  }
-
-  _digToTarget(s, spd) {
-    // Navigate through tunnels toward an assigned dig target
-    // If in open space, move toward target; if solid, dig through
-    if (this.digTargetX < 0 || this.digTargetY < 0) {
-      this.state = ST.EXPLORE;
-      return;
-    }
-    const tdx = this.digTargetX - s.gx, tdy = this.digTargetY - s.gy;
-    const tdist = Math.hypot(tdx, tdy);
-
-    if (tdist < 4) {
-      // Arrived — start assigned digging
-      if (this.assignedType === 'shaft') {
-        this.state = ST.DIG_DOWN;
-        this.digAngle = Math.PI * 0.5;
-      } else if (this.assignedType === 'chamber') {
-        this.state = ST.DIG_CHAMBER;
-        this.patience = 0;
-      } else {
-        this.state = ST.DIG_BRANCH;
-        // Gallery direction based on which side of shaft we are
-        this.digAngle = s.gx < tunnelPlan.mainShaftX ? Math.PI : 0;
-      }
-      this.digTargetX = -1;
-      this.digTargetY = -1;
-      return;
-    }
-
-    // Move toward target through tunnels
-    const angle = Math.atan2(tdy, tdx);
-    this.heading = this.heading * 0.6 + angle * 0.4;
-    const dx = Math.cos(this.heading), dy = Math.sin(this.heading);
-
-    // Check if path ahead is open
-    const aheadX = s.gx + Math.round(dx * 2), aheadY = s.gy + Math.round(dy * 2);
-    if (!isSolid(aheadX, aheadY)) {
-      // Open path — walk through
-      this.vx += dx * spd * 0.4;
-      this.vy += dy * spd * 0.4;
-    } else {
-      // Blocked — dig through
-      if (this.digCD <= 0) {
-        let dugCount = 0;
-        for (let ddx = -1; ddx <= 1; ddx++) for (let ddy = -1; ddy <= 1; ddy++) {
-          if (ddx * ddx + ddy * ddy <= 1 && dugCount < 2) {
-            const result = digCell(aheadX + ddx, aheadY + ddy);
-            if (result) { dugCount++; this.digCount++; }
-          }
-        }
-        this.digCD = 8;
-        if (dugCount > 0) {
-          spawnDirt(aheadX * CELL, aheadY * CELL);
-          tunnelPlan.notifyDig(aheadX, aheadY);
-        }
-      }
-      this.vx += dx * spd * 0.15;
-      this.vy += dy * spd * 0.15;
-    }
-    this.vx *= 0.85; this.vy *= 0.85;
-  }
-
-  _explore(s, spd) {
-    // Experienced ants walk straighter (research: narrower angular distribution)
-    const turnRange = this.experience > 500 ? 0.25 : 0.6;
-    this._correlatedWalk(spd, turnRange);
-
-    const aheadX = s.gx + Math.round(Math.cos(this.heading) * 3);
-    const aheadY = s.gy + Math.round(Math.sin(this.heading) * 3);
-    if (isSolid(aheadX, aheadY)) {
-      this.heading += Math.PI * 0.5 + (Math.random() - 0.5) * 0.5;
-      // Only dig when exploring if it extends existing tunnel network
-      if (this.threshold.dig < 0.3 && this.digCD <= 0 && Math.random() < 0.08) {
-        let dugCount = 0;
-        for (let d = -1; d <= 1; d++) for (let e = -1; e <= 1; e++) {
-          const r = digCell(aheadX + d, aheadY + e);
-          if (r) { this.digCount++; dugCount++; }
-        }
-        this.digCD = 12;
-        if (dugCount > 0) tunnelPlan.notifyDig(aheadX, aheadY);
-      }
-    }
-    this.vx *= 0.88; this.vy *= 0.88;
-  }
-
-  _wallFollow(s, spd) {
-    if (!s.wallDir) { this.state = ST.EXPLORE; return; }
-    const w = s.wallDir;
-
-    let targetAngle = this.heading;
-    if (w.r && !isSolid(s.gx + Math.round(Math.cos(this.heading)), s.gy + Math.round(Math.sin(this.heading)))) {
-      // Wall on right, ahead clear — go forward
-    } else if (!w.r && !w.d) {
-      targetAngle = this.heading + 0.4;
-    } else if (isSolid(s.gx + Math.round(Math.cos(this.heading)), s.gy + Math.round(Math.sin(this.heading)))) {
-      targetAngle = this.heading - 0.6;
-    }
-
-    this.heading = this.heading * 0.8 + targetAngle * 0.2;
-    this.vx += Math.cos(this.heading) * spd * 0.4;
-    this.vy += Math.sin(this.heading) * spd * 0.4;
-    this.vx *= 0.88; this.vy *= 0.88;
-  }
-
-  _goUp(s, spd) {
-    // Navigate upward through TUNNELS only — don't fly, don't pass through solid
-    // Scan for the best open-air direction that leads upward
-    let best = -Math.PI / 2, bestS = -999;
-    for (let a = -Math.PI; a < Math.PI; a += 0.35) {
-      const cx = s.gx + Math.round(Math.cos(a) * 2), cy = s.gy + Math.round(Math.sin(a) * 2);
-      if (!isSolid(cx, cy)) {
-        // Strongly prefer upward directions, but only through air
-        const upBias = -Math.sin(a) * 3.0; // reward upward
-        const trailBonus = phGet(cx, cy, phTrail) * 1.0; // follow trails
-        const sc = upBias + trailBonus;
-        if (sc > bestS) { bestS = sc; best = a; }
-      }
-    }
-    this.heading = this.heading * 0.5 + best * 0.5;
-    this.vx += Math.cos(this.heading) * spd * 0.35;
-    this.vy += Math.sin(this.heading) * spd * 0.35;
-    // Only dig if truly stuck (surrounded by walls) — last resort
-    if (this.stuck > 20 && this.digCD <= 0) {
-      digCell(s.gx, s.gy - 1); digCell(s.gx, s.gy - 2);
-      this.digCD = 8;
-    }
-    this.vx *= 0.85; this.vy *= 0.85;
-  }
-
-  _forage(s, spd) {
-    if (this.targetX >= 0 && s.food) {
-      const dx = this.targetX - this.x, dy = this.targetY - this.y, d = Math.hypot(dx, dy);
-      if (d > 4) {
-        this.heading = Math.atan2(dy, dx);
-        this.vx += (dx / d) * spd * 0.55;
-        this.vy += (dy / d) * spd * 0.55;
-      }
-    } else if (s.foodGrad.angle !== null) {
-      this.heading = this.heading * 0.6 + s.foodGrad.angle * 0.4;
-      this.vx += Math.cos(this.heading) * spd * 0.4;
-      this.vy += Math.sin(this.heading) * spd * 0.4;
-    } else {
-      this._correlatedWalk(spd, 0.5);
-    }
-    this.vx *= 0.9; this.vy *= 0.9;
-  }
-
-  // Tandem running: leader moves at 25% speed, waits if follower falls behind
-  _tandemLead(s, spd) {
-    if (!this.tandemTarget) { this.state = ST.EXPLORE; return; }
-    const target = this.tandemTarget;
-    const dist = Math.hypot(target.x - this.x, target.y - this.y);
-
-    // Wait if follower falls behind (research: leader slows/pauses)
-    if (dist > 30) {
-      this.vx *= 0.3; this.vy *= 0.3;
-      return;
-    }
-
-    // Move toward dig site or deeper underground
-    this.vy += spd * 0.15;
-    this._correlatedWalk(spd * 0.5, 0.3);
-    this.vx *= 0.85; this.vy *= 0.85;
-
-    // End tandem after reaching depth
-    if (this.depthR() > 0.3) {
-      target.tandemLeader = null;
-      target.role = 'digger';
-      target.state = ST.DIG_BRANCH;
-      target.threshold.dig *= 0.5; // follower learned to dig
-      target.experience += 200;
-      this.tandemTarget = null;
-      this.state = ST.EXPLORE;
-    }
-  }
-
-  _tandemFollow(s, spd) {
-    if (!this.tandemLeader) { this.state = ST.EXPLORE; return; }
-    const leader = this.tandemLeader;
-    const dx = leader.x - this.x, dy = leader.y - this.y;
-    const d = Math.hypot(dx, dy);
-
-    // Follow leader — signal readiness by getting close
-    if (d > 8) {
-      this.vx += (dx / d) * spd * 0.5;
-      this.vy += (dy / d) * spd * 0.5;
-    }
-    this.vx *= 0.88; this.vy *= 0.88;
-    this.experience += 0.5; // learning while following
-  }
-
-  _unstick(gx, gy) {
-    const seen = new Set(), q = [[gx, gy]]; seen.add(gx + ',' + gy);
-    while (q.length) {
-      const [cx, cy] = q.shift();
-      if (!isSolid(cx, cy) && cy >= 0 && cy < ROWS) {
-        this.x = cx * CELL + CELL / 2; this.y = cy * CELL + CELL / 2;
-        this.vx = this.vy = 0; return;
-      }
-      for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
-        const nx = cx + dx, ny = cy + dy, k = nx + ',' + ny;
-        if (!seen.has(k) && nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS) {
-          seen.add(k); q.push([nx, ny]);
-        }
-      }
-      if (seen.size > 300) break;
-    }
-  }
-
-  update() { const s = this.sense(); this.think(s); this.act(s); }
-}
-
-// ═══════════════════════════════════════════════════════════════════
-//  PARTICLES
-// ═══════════════════════════════════════════════════════════════════
-
-function spawnDirt(x, y) {
-  for (let i = 0; i < 4; i++)
-    particles.push({
-      x: x + Math.random() * CELL, y: y + Math.random() * CELL,
-      vx: (Math.random() - 0.5) * 1.2, vy: -Math.random() * 1.0 - 0.2,
-      life: 25 + Math.random() * 15, size: 1 + Math.random() * 1.5,
-      r: 200 + Math.random() * 30, g: 180 + Math.random() * 20, b: 140 + Math.random() * 20
-    });
-}
 
 function tickParticles() {
   for (let i = particles.length - 1; i >= 0; i--) {
@@ -1676,16 +367,12 @@ function tickParticles() {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-//  RENDERING — Smooth sand with multi-octave noise and SDF edges
+//  RENDERING — Smooth sand with SDF edges
 // ═══════════════════════════════════════════════════════════════════
 
-const SAND_R = 212, SAND_G = 194, SAND_B = 162;
-
-// Cached terrain image data
-let terrainImageData;
-
 function renderTerrain() {
-  // Only re-render terrain when it changes
+  if (!grid) return;
+
   if (!terrainDirty && terrainImageData) {
     tCtx.putImageData(terrainImageData, 0, 0);
   } else {
@@ -1700,7 +387,7 @@ function renderTerrain() {
       }
     }
 
-    // Ground — ONE single uniform sand color everywhere
+    // Ground
     for (let py = SURFACE_PX; py < H; py++) {
       const gy = (py / CELL) | 0;
       for (let px = 0; px < W; px++) {
@@ -1710,26 +397,14 @@ function renderTerrain() {
 
         if (v > 0) {
           let r = SAND_R, g = SAND_G, b = SAND_B;
-
-          // Only darken at tunnel edges for depth perception
           const af = airFraction(gx, gy);
           if (af > 0 && af < 1) {
             const shadow = af * 0.3;
-            r *= (1 - shadow);
-            g *= (1 - shadow);
-            b *= (1 - shadow);
+            r *= (1 - shadow); g *= (1 - shadow); b *= (1 - shadow);
           }
-
-          d[i] = r | 0;
-          d[i + 1] = g | 0;
-          d[i + 2] = b | 0;
-          d[i + 3] = 255;
+          d[i] = r | 0; d[i + 1] = g | 0; d[i + 2] = b | 0; d[i + 3] = 255;
         } else {
-          // Tunnel interior — uniform dark
-          d[i] = 10;
-          d[i + 1] = 8;
-          d[i + 2] = 6;
-          d[i + 3] = 255;
+          d[i] = 10; d[i + 1] = 8; d[i + 2] = 6; d[i + 3] = 255;
         }
       }
     }
@@ -1739,11 +414,9 @@ function renderTerrain() {
     terrainDirty = false;
   }
 
-  // Draw with blur to eliminate cell boundaries / pixelation
   ctx.filter = 'blur(2.5px)';
   ctx.drawImage(tOff, 0, 0);
   ctx.filter = 'none';
-  // Overlay sharp version at low opacity for edge definition
   ctx.globalAlpha = 0.25;
   ctx.drawImage(tOff, 0, 0);
   ctx.globalAlpha = 1.0;
@@ -1797,7 +470,7 @@ function renderSilhouette() {
   // Windmill
   const wmX = right - 200;
   ctx.fillRect(wmX, y - 40, 6, 38);
-  ctx.save(); ctx.translate(wmX + 3, y - 40); ctx.rotate(frame * 0.008);
+  ctx.save(); ctx.translate(wmX + 3, y - 40); ctx.rotate(renderFrame_counter * 0.008);
   for (let i = 0; i < 4; i++) { ctx.rotate(Math.PI / 2); ctx.fillRect(-2, 0, 4, 18); }
   ctx.restore();
 
@@ -1825,7 +498,7 @@ function renderSilhouette() {
 
 function renderFood() {
   for (const f of foods) {
-    const p = 1 + Math.sin(frame * 0.05) * 0.12, r = 3 + f.amount * 0.8;
+    const p = 1 + Math.sin(renderFrame_counter * 0.05) * 0.12, r = 3 + f.amount * 0.8;
     ctx.beginPath(); ctx.arc(f.x, f.y, r * 2 * p, 0, 6.28); ctx.fillStyle = 'rgba(70,170,50,0.06)'; ctx.fill();
     ctx.beginPath(); ctx.arc(f.x, f.y, r * p, 0, 6.28); ctx.fillStyle = 'rgba(90,190,60,0.85)'; ctx.fill();
   }
@@ -1841,34 +514,27 @@ function renderParticles() {
 
 // ── Side-view ant rendering (profile view like looking through glass) ──
 function renderAnt3D(ant) {
-  const x = ant.x, y = ant.y + ant.bodyBob, s = ant.size;
-  // Determine facing direction: left (-1) or right (+1) based on horizontal velocity
+  const x = ant.x, y = ant.y + (ant.bodyBob || 0), s = ant.size;
   const facingRight = ant.vx >= 0 ? 1 : -1;
   const mov = Math.hypot(ant.vx, ant.vy) > 0.08 && !ant.isPaused;
 
   ctx.save();
   ctx.translate(x, y);
-  ctx.scale(facingRight, 1); // flip horizontally if going left
+  ctx.scale(facingRight, 1);
 
   const br = 42 + ant.hue, bg = 20 + ant.hue * 0.3, bb = 12 + ant.hue * 0.2;
 
-  // === LEGS (3 pairs, side view — only near-side legs visible) ===
+  // === LEGS (3 pairs, side view) ===
   ctx.strokeStyle = `rgb(${br - 8},${bg - 4},${bb - 3})`;
   ctx.lineWidth = 0.6; ctx.lineCap = 'round';
 
   for (let i = 0; i < 3; i++) {
     const tripodOffset = (i === 1) ? Math.PI : 0;
     const phase = mov ? Math.sin(ant.legT + tripodOffset) : 0;
-
-    // Leg attachment point on body (front, middle, back)
     const attachX = -s * 0.4 + i * s * 0.7;
-    const attachY = s * 0.15; // bottom of body
-
-    // Upper leg segment (coxa/femur) — goes down and slightly out
+    const attachY = s * 0.15;
     const kneeX = attachX + phase * s * 0.3;
     const kneeY = attachY + s * 0.7;
-
-    // Lower leg segment (tibia/tarsus) — goes down to ground
     const footX = kneeX + (i - 1) * s * 0.25 + phase * s * 0.4;
     const footY = attachY + s * 1.3 + Math.abs(phase) * s * 0.15;
 
@@ -1877,15 +543,13 @@ function renderAnt3D(ant) {
     ctx.lineTo(kneeX, kneeY);
     ctx.lineTo(footX, footY);
     ctx.stroke();
-
-    // Tiny foot/tarsus hook
     ctx.beginPath();
     ctx.moveTo(footX, footY);
     ctx.lineTo(footX + s * 0.15, footY + s * 0.05);
     ctx.stroke();
   }
 
-  // === ABDOMEN (gaster) — large oval, rear of body ===
+  // === ABDOMEN ===
   const abdX = -s * 1.0, abdY = -s * 0.1;
   let g = ctx.createRadialGradient(abdX, abdY - s * 0.2, 0, abdX, abdY, s * 0.9);
   g.addColorStop(0, `rgb(${br + 25},${bg + 12},${bb + 6})`);
@@ -1893,21 +557,19 @@ function renderAnt3D(ant) {
   g.addColorStop(1, `rgb(${br - 12},${bg - 6},${bb - 4})`);
   ctx.fillStyle = g;
   ctx.beginPath(); ctx.ellipse(abdX, abdY, s * 1.0, s * 0.65, -0.1, 0, 6.28); ctx.fill();
-  // Highlight
   ctx.fillStyle = 'rgba(255,255,255,0.1)';
   ctx.beginPath(); ctx.ellipse(abdX + s * 0.1, abdY - s * 0.25, s * 0.4, s * 0.2, -0.2, 0, 6.28); ctx.fill();
-  // Segment lines
   ctx.strokeStyle = `rgba(${br - 15},${bg - 8},${bb - 5},0.25)`; ctx.lineWidth = 0.3;
   for (let i = 0; i < 3; i++) {
     const sx2 = abdX - s * 0.4 + i * s * 0.35;
     ctx.beginPath(); ctx.moveTo(sx2, abdY - s * 0.5); ctx.quadraticCurveTo(sx2 + s * 0.05, abdY, sx2, abdY + s * 0.5); ctx.stroke();
   }
 
-  // === PETIOLE (narrow waist) ===
+  // === PETIOLE ===
   ctx.fillStyle = `rgb(${br - 5},${bg - 3},${bb - 2})`;
   ctx.beginPath(); ctx.ellipse(-s * 0.1, s * 0.0, s * 0.15, s * 0.12, 0, 0, 6.28); ctx.fill();
 
-  // === THORAX (middle section) ===
+  // === THORAX ===
   const thX = s * 0.35, thY = -s * 0.05;
   g = ctx.createRadialGradient(thX, thY - s * 0.15, 0, thX, thY, s * 0.5);
   g.addColorStop(0, `rgb(${br + 20},${bg + 10},${bb + 5})`);
@@ -1915,11 +577,10 @@ function renderAnt3D(ant) {
   g.addColorStop(1, `rgb(${br - 8},${bg - 4},${bb - 3})`);
   ctx.fillStyle = g;
   ctx.beginPath(); ctx.ellipse(thX, thY, s * 0.45, s * 0.35, -0.15, 0, 6.28); ctx.fill();
-  // Highlight
   ctx.fillStyle = 'rgba(255,255,255,0.08)';
   ctx.beginPath(); ctx.ellipse(thX, thY - s * 0.15, s * 0.2, s * 0.1, 0, 0, 6.28); ctx.fill();
 
-  // === HEAD (front, slightly angled down) ===
+  // === HEAD ===
   const hdX = s * 0.95, hdY = s * 0.05;
   g = ctx.createRadialGradient(hdX, hdY - s * 0.1, 0, hdX, hdY, s * 0.4);
   g.addColorStop(0, `rgb(${br + 15},${bg + 8},${bb + 4})`);
@@ -1928,7 +589,7 @@ function renderAnt3D(ant) {
   ctx.fillStyle = g;
   ctx.beginPath(); ctx.ellipse(hdX, hdY, s * 0.38, s * 0.32, 0.1, 0, 6.28); ctx.fill();
 
-  // Eye (single eye visible from side view)
+  // Eye
   ctx.fillStyle = 'rgba(0,0,0,0.7)';
   ctx.beginPath(); ctx.arc(hdX + s * 0.18, hdY - s * 0.08, s * 0.08, 0, 6.28); ctx.fill();
   ctx.fillStyle = 'rgba(255,255,255,0.35)';
@@ -1937,14 +598,12 @@ function renderAnt3D(ant) {
   // === MANDIBLES ===
   ctx.strokeStyle = `rgb(${br - 8},${bg - 4},${bb - 3})`; ctx.lineWidth = 0.7; ctx.lineCap = 'round';
   const mO = mov ? Math.sin(ant.legT * 0.5) * 0.08 : 0;
-  // Upper mandible
   ctx.beginPath(); ctx.moveTo(hdX + s * 0.3, hdY - s * 0.05);
   ctx.quadraticCurveTo(hdX + s * 0.55, hdY - s * 0.15 - mO * s, hdX + s * 0.6, hdY - s * 0.02 - mO * s); ctx.stroke();
-  // Lower mandible
   ctx.beginPath(); ctx.moveTo(hdX + s * 0.3, hdY + s * 0.1);
   ctx.quadraticCurveTo(hdX + s * 0.55, hdY + s * 0.2 + mO * s, hdX + s * 0.6, hdY + s * 0.08 + mO * s); ctx.stroke();
 
-  // Sand grain in mandibles when hauling
+  // Sand grain in mandibles
   if (ant.carryingSand > 0) {
     ctx.fillStyle = `rgb(${SAND_R},${SAND_G},${SAND_B})`;
     ctx.beginPath(); ctx.arc(hdX + s * 0.55, hdY + s * 0.03, s * 0.18, 0, 6.28); ctx.fill();
@@ -1952,17 +611,14 @@ function renderAnt3D(ant) {
     ctx.beginPath(); ctx.arc(hdX + s * 0.52, hdY - s * 0.02, s * 0.08, 0, 6.28); ctx.fill();
   }
 
-  // === ANTENNA (single, side view — curves up and forward) ===
+  // === ANTENNA ===
   ctx.lineWidth = 0.5; ctx.strokeStyle = `rgb(${br - 5},${bg - 3},${bb - 2})`;
   const antBob = Math.sin(ant.antT) * 0.15;
   const antExt = ant.antennateTimer > 0 ? 0.25 : 0;
-  // Scape (first segment, straight)
   ctx.beginPath(); ctx.moveTo(hdX + s * 0.2, hdY - s * 0.2);
-  // Funiculus (curved up and forward)
   ctx.quadraticCurveTo(hdX + s * 0.5, hdY - s * 0.7 + antBob * s,
     hdX + s * (0.8 + antExt), hdY - s * (0.8 - antExt * 0.3) + antBob * s);
   ctx.stroke();
-  // Club (tip bulge)
   ctx.fillStyle = `rgb(${br + 5},${bg + 3},${bb + 2})`;
   ctx.beginPath(); ctx.arc(hdX + s * (0.8 + antExt), hdY - s * (0.8 - antExt * 0.3) + antBob * s, s * 0.06, 0, 6.28); ctx.fill();
 
@@ -1974,7 +630,7 @@ function renderAnt3D(ant) {
     ctx.beginPath(); ctx.arc(hdX + s * 0.45, hdY - s * 0.08, s * 0.12, 0, 6.28); ctx.fill();
   }
 
-  // Queen marker (larger abdomen already from size, add subtle crown)
+  // Queen marker
   if (ant.isQueen) {
     ctx.fillStyle = 'rgba(255,200,50,0.5)';
     ctx.beginPath(); ctx.arc(abdX, abdY - s * 0.75, s * 0.2, 0, 6.28); ctx.fill();
@@ -1989,17 +645,19 @@ function renderAnt3D(ant) {
   ctx.restore();
 }
 
-// Tandem running visual: draw line between leader and follower
 function renderTandemLines() {
   ctx.strokeStyle = 'rgba(255,200,100,0.15)';
   ctx.lineWidth = 1;
   ctx.setLineDash([3, 4]);
   for (const ant of ants) {
-    if (ant.tandemTarget) {
-      ctx.beginPath();
-      ctx.moveTo(ant.x, ant.y);
-      ctx.lineTo(ant.tandemTarget.x, ant.tandemTarget.y);
-      ctx.stroke();
+    if (ant.tandemTargetId) {
+      const target = ants.find(a => a.id === ant.tandemTargetId);
+      if (target) {
+        ctx.beginPath();
+        ctx.moveTo(ant.x, ant.y);
+        ctx.lineTo(target.x, target.y);
+        ctx.stroke();
+      }
     }
   }
   ctx.setLineDash([]);
@@ -2014,7 +672,10 @@ function renderGlass() {
   ctx.fillStyle = '#fff'; ctx.fillRect(-15, 0, 30, H * 1.5); ctx.restore();
 }
 
+let renderFrame_counter = 0;
+
 function render() {
+  if (!grid) return;
   ctx.clearRect(0, 0, W, H);
   renderTerrain();
   renderSilhouette();
@@ -2043,9 +704,9 @@ function updateTooltip() {
   if (hoveredAnt) {
     const a = hoveredAnt;
     document.getElementById('ttName').textContent = a.name;
-    document.getElementById('ttState').textContent = ST_NAMES[a.state] + (a.isPaused ? ' (paused)' : '');
+    document.getElementById('ttState').textContent = (ST_NAMES[a.state] || 'Unknown') + (a.isPaused ? ' (paused)' : '');
     document.getElementById('ttEnergy').textContent = Math.round(a.energy);
-    document.getElementById('ttAge').textContent = Math.round(a.age / 60) + 's';
+    document.getElementById('ttAge').textContent = Math.round((a.age || 0) / 60) + 's';
     document.getElementById('ttRole').textContent = a.role + (a.isQueen ? ' (queen)' : '') + (a.carryingSand > 0 ? ' [hauling]' : '');
     document.getElementById('ttThought').textContent = a.lastThought || '—';
     tooltip.classList.add('show');
@@ -2055,77 +716,32 @@ function updateTooltip() {
 document.addEventListener('mousemove', e => { mouseX = e.clientX; mouseY = e.clientY; updateTooltip(); });
 
 // ═══════════════════════════════════════════════════════════════════
-//  GAME LOOP
+//  RENDER LOOP
 // ═══════════════════════════════════════════════════════════════════
 
 function tick() {
-  if (!paused) {
-    for (let s = 0; s < speed; s++) {
-      for (const ant of ants) ant.update();
-      if (frame % 3 === 0) gravity();
-      if (frame % 8 === 0) phDecay();
-      tickParticles();
-      for (let i = ants.length - 1; i >= 0; i--) if (ants[i].energy <= 0) ants.splice(i, 1);
+  renderFrame_counter++;
 
-      // Queen spawns new ant occasionally
-      if (hasQueen && frame % 1800 === 0 && ants.length < 60) {
-        const queen = ants.find(a => a.isQueen);
-        if (queen) {
-          ants.push(new Ant(queen.x + (Math.random() - 0.5) * 10, queen.y));
-        }
-      }
+  // Interpolate ants between server snapshots
+  interpolateAnts();
+  tickParticles();
 
-      // AI awareness pass every ~60 seconds
-      if (frame - lastAITick >= AI_INTERVAL) {
-        aiAwarenessPass();
-        lastAITick = frame;
-      }
-
-      frame++;
-      simDay = 1 + (frame / 3600) | 0;
-    }
-    if (frame % 250 === 0) detectChambers();
-  }
+  // Re-render
   render();
   updateHUD();
   requestAnimationFrame(tick);
 }
 
 // ═══════════════════════════════════════════════════════════════════
-//  UI
+//  HUD
 // ═══════════════════════════════════════════════════════════════════
 
 function updateHUD() {
-  const pct = (totalDug / ((ROWS - SURFACE) * COLS) * 100).toFixed(1);
+  const pct = grid ? (totalDug / ((ROWS - SURFACE) * COLS) * 100).toFixed(1) : '0.0';
   document.getElementById('sAnts').textContent = ants.length;
   document.getElementById('sTunnel').textContent = pct + '%';
   document.getElementById('sChambers').textContent = chambers.length;
   document.getElementById('sDay').textContent = simDay;
-}
-
-function dropAnts(n) {
-  for (let i = 0; i < n; i++) ants.push(new Ant(Math.random() * (W - 80) + 40, (SURFACE - 1) * CELL));
-  if (!hasQueen && ants.length > 0) {
-    const q = new Ant(W / 2, (SURFACE - 1) * CELL, true);
-    ants.push(q);
-    hasQueen = true;
-  }
-  toast(n + ' ant' + (n > 1 ? 's' : '') + ' released');
-}
-
-function dropFood() {
-  foods.push({ x: Math.random() * (W - 60) + 30, y: SURFACE_PX - CELL * 2, amount: 4 + (Math.random() * 5) | 0 });
-  toast('Food placed');
-}
-
-function cycleSpeed() {
-  const s = [1, 2, 4, 8]; speed = s[(s.indexOf(speed) + 1) % s.length];
-  document.getElementById('speedLabel').textContent = speed + 'x'; toast('Speed: ' + speed + 'x');
-}
-
-function togglePause() {
-  paused = !paused; document.getElementById('pauseBtn').textContent = paused ? 'play' : 'pause';
-  toast(paused ? 'Paused' : 'Resumed');
 }
 
 function toast(msg) {
@@ -2133,28 +749,35 @@ function toast(msg) {
   clearTimeout(el._t); el._t = setTimeout(() => el.classList.remove('show'), 1800);
 }
 
-canvas.addEventListener('click', e => {
-  const rect = canvas.getBoundingClientRect(); const sx = W / rect.width, sy = H / rect.height;
-  const x = (e.clientX - rect.left) * sx, y = (e.clientY - rect.top) * sy;
-  const gx = (x / CELL) | 0, gy = (y / CELL) | 0;
-  if (x < FRAME || x > W - FRAME || y < FRAME || y > H - FRAME * 2.5) return;
-  if (gy <= SURFACE + 2) { ants.push(new Ant(x, Math.min(y, SURFACE_PX - 2))); toast('Ant dropped'); }
-  else { const r = 4; for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) if (dx * dx + dy * dy <= r * r) digCell(gx + dx, gy + dy); spawnDirt(x, y); }
-});
+// ═══════════════════════════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════════════════════════
 
-function begin() {
+async function begin() {
   document.getElementById('intro').classList.add('hide');
-  setTimeout(() => {
+  setTimeout(async () => {
     document.getElementById('intro').style.display = 'none';
     document.getElementById('app').classList.add('show');
     canvas.width = W; canvas.height = H; resizeCanvas();
-    genSandNoise(); initTerrain(); tunnelPlan.init(); dropAnts(8);
-    running = true; tick();
+
+    running = true;
+
+    // Fetch initial state
+    await fetchState();
+
+    // Start render loop
+    tick();
+
+    // Start polling server
+    setInterval(fetchState, POLL_INTERVAL);
+
+    toast('Connected to live colony');
   }, 500);
 }
 
 function resizeCanvas() {
-  const wrap = document.getElementById('wrap'); const ww = wrap.clientWidth, wh = wrap.clientHeight;
+  const wrap = document.getElementById('wrap');
+  const ww = wrap.clientWidth, wh = wrap.clientHeight;
   const aspect = W / H, wrapAspect = ww / wh;
   let cw, ch;
   if (wrapAspect > aspect) { ch = wh; cw = wh * aspect; } else { cw = ww; ch = ww / aspect; }
