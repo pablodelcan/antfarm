@@ -8,7 +8,7 @@
 // ═══════════════════════════════════════════════════════════════════
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { kv } from '@vercel/kv';
+const { kv } = require('../lib/kv');
 import { getColonyDirective, applyDirective } from '../lib/claude';
 import type { ColonyDirective } from '../lib/types';
 
@@ -31,14 +31,24 @@ const MAX_EXECUTION_MS = 55_000; // 55s (Vercel Pro limit is 60s)
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const startTime = Date.now();
 
-  // Verify this is a cron call or has authorization
-  // Vercel crons include an Authorization header
+  // Verify this is a cron call, has authorization, or is a viewer-triggered tick
   const authHeader = req.headers['authorization'];
   const isVercelCron = authHeader === `Bearer ${process.env.CRON_SECRET}`;
   const isManualTrigger = req.query.secret === process.env.CRON_SECRET;
+  const isViewerTrigger = req.query.viewer === '1';
 
-  if (!isVercelCron && !isManualTrigger && process.env.NODE_ENV === 'production') {
+  // On Hobby plan, cron is daily only, so viewers can trigger ticks too
+  // Rate-limit viewer triggers via KV timestamp check
+  if (!isVercelCron && !isManualTrigger && !isViewerTrigger && process.env.NODE_ENV === 'production') {
     return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  // Rate-limit viewer-triggered ticks to once per 4 minutes
+  if (isViewerTrigger) {
+    const lastTick = await kv.get('colony:last-tick') as number | null;
+    if (lastTick && Date.now() - lastTick < 4 * 60 * 1000) {
+      return res.status(200).json({ throttled: true, message: 'Tick ran recently' });
+    }
   }
 
   try {
