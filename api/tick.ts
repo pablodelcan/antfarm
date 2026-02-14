@@ -43,8 +43,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
+  // Handle colony reset request (wipe state, next tick creates fresh colony)
+  const isReset = req.query.reset === '1';
+  if (isReset) {
+    try {
+      // Rate-limit resets to once per 2 minutes
+      const lastReset = await kv.get('colony:last-reset') as number | null;
+      if (lastReset && Date.now() - lastReset < 2 * 60 * 1000) {
+        return res.status(200).json({ throttled: true, message: 'Reset ran recently, wait a bit' });
+      }
+      await Promise.all([
+        kv.del('colony:state'),
+        kv.del('colony:viewer-state'),
+        kv.del('colony:directive'),
+        kv.set('colony:last-reset', Date.now()),
+      ]);
+      console.log('Colony reset — will create fresh on next tick');
+      // Fall through to run a tick with fresh state
+    } catch (resetErr) {
+      console.error('Reset error:', resetErr);
+    }
+  }
+
   // Rate-limit viewer-triggered ticks to once per 4 minutes
-  if (isViewerTrigger) {
+  if (isViewerTrigger && !isReset) {
     const lastTick = await kv.get('colony:last-tick') as number | null;
     if (lastTick && Date.now() - lastTick < 4 * 60 * 1000) {
       return res.status(200).json({ throttled: true, message: 'Tick ran recently' });

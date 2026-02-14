@@ -122,6 +122,12 @@
     animation: pulse 2s infinite;
   }
   @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+  .bottombar .restart-btn {
+    font-size: 0.58rem; color: #ccc; letter-spacing: 0.04em;
+    background: none; border: 1px solid #e0e0e0; padding: 2px 10px;
+    cursor: pointer; border-radius: 3px; margin-left: 12px; transition: all 0.2s;
+  }
+  .bottombar .restart-btn:hover { color: #888; border-color: #aaa; }
   .toast {
     position: fixed; bottom: 48px; left: 50%; transform: translateX(-50%) translateY(8px);
     background: #1a1a1a; color: #fff; padding: 8px 20px; font-size: 0.72rem;
@@ -197,6 +203,7 @@
       <span class="dot"></span>
       <span id="statusText">Connecting...</span>
     </div>
+    <button class="restart-btn" id="restartBtn" onclick="restartColony()">Restart Colony</button>
   </div>
 </div>
 
@@ -548,9 +555,7 @@ function interpolateAnts() {
     const target = antsTarget.find(a => a.id === ant.id);
     if (!target) continue;
 
-    ant.x += (target.x - ant.x) * 0.08;
-    ant.y += (target.y - ant.y) * 0.08;
-
+    // Copy state properties from server
     ant.state = target.state;
     ant.role = target.role;
     ant.carrying = target.carrying;
@@ -561,17 +566,76 @@ function interpolateAnts() {
     ant.energy = target.energy;
     ant.heading = target.heading;
 
-    const moving = Math.hypot(target.vx, target.vy) > 0.08;
+    // ── Client-side dead reckoning ──
+    // Use server velocity to keep ants moving between state updates.
+    // First, blend toward server position (corrects drift),
+    // then apply velocity for forward motion.
+    const dx = target.x - ant.x;
+    const dy = target.y - ant.y;
+    const dist = Math.hypot(dx, dy);
+
+    if (dist > 80) {
+      // Too far off — snap to server position
+      ant.x = target.x;
+      ant.y = target.y;
+    } else {
+      // Correction pull toward server position (gentle rubber-band)
+      ant.x += dx * 0.12;
+      ant.y += dy * 0.12;
+    }
+
+    // Apply server velocity for continuous movement
+    const svx = target.vx || 0;
+    const svy = target.vy || 0;
+    const speed = Math.hypot(svx, svy);
+
+    if (speed > 0.05) {
+      // Moving ant — apply velocity scaled for visual frame rate
+      ant.x += svx * 0.6;
+      ant.y += svy * 0.6;
+    } else if (!ant.isQueen) {
+      // Idle/stuck ant — gentle ambient wander so they look alive
+      // Small random walk within a tiny radius
+      if (!ant._wigglePhase) ant._wigglePhase = Math.random() * Math.PI * 2;
+      ant._wigglePhase += 0.03 + Math.random() * 0.02;
+      ant.x += Math.sin(ant._wigglePhase) * 0.15;
+      ant.y += Math.cos(ant._wigglePhase * 0.7) * 0.08;
+    }
+
+    // Basic grid collision — don't let ants walk into solid terrain
+    if (grid) {
+      const gx = Math.floor(ant.x / CELL);
+      const gy = Math.floor(ant.y / CELL);
+      if (gy >= SURFACE && isSolid(gx, gy)) {
+        // Push back to previous position or nearest air
+        ant.x -= (svx || 0) * 0.6;
+        ant.y -= (svy || 0) * 0.6;
+      }
+      // Keep above surface if ant was above surface
+      if (gy < SURFACE && ant.y > SURFACE_PX) {
+        ant.y = SURFACE_PX - 1;
+      }
+    }
+
+    // Clamp to world bounds
+    ant.x = Math.max(4, Math.min(W - 4, ant.x));
+    ant.y = Math.max(4, Math.min(H - 4, ant.y));
+
+    ant.vx = svx;
+    ant.vy = svy;
+
+    const moving = speed > 0.05 || (!ant.isQueen);
     const posture = getAntPosture(ant);
 
     if (moving || posture.animateWhenStill) {
-      ant.legT += 0.35 * posture.legSpeed;
-      ant.antT += 0.08 * posture.antennaSpeed;
+      const animSpeed = speed > 0.05 ? 1.0 : 0.3; // Slower animation when just wiggling
+      ant.legT += 0.35 * posture.legSpeed * animSpeed;
+      ant.antT += 0.08 * posture.antennaSpeed * Math.max(animSpeed, 0.5);
       ant.bodyBob = Math.sin(ant.legT * 0.4) * 0.3;
     }
 
     // Hauling trail particles
-    if (ant.carryingSand > 0 && moving && Math.random() < 0.08) {
+    if (ant.carryingSand > 0 && speed > 0.05 && Math.random() < 0.08) {
       const behind = ant.vx >= 0 ? -1 : 1;
       particles.push({
         x: ant.x + behind * ant.size * 1.5,
@@ -583,9 +647,6 @@ function interpolateAnts() {
         r: SAND_R - 10, g: SAND_G - 8, b: SAND_B - 5
       });
     }
-
-    ant.vx = target.vx;
-    ant.vy = target.vy;
   }
 }
 
@@ -1245,6 +1306,34 @@ async function adminAction(action, value) {
   } catch (err) {
     toast('Admin error');
   }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  RESTART COLONY
+// ═══════════════════════════════════════════════════════════════════
+
+async function restartColony() {
+  if (!confirm('Restart the ant colony from scratch? All progress will be lost.')) return;
+  const btn = document.getElementById('restartBtn');
+  btn.textContent = 'Restarting...';
+  btn.disabled = true;
+  try {
+    const res = await fetch('/api/tick?viewer=1&reset=1');
+    const data = await res.json();
+    if (data.throttled) {
+      toast('Colony was recently reset. Wait a moment and try again.');
+    } else if (data.success) {
+      toast('Colony restarted! Day 1 begins.');
+      // Force an immediate state fetch
+      setTimeout(fetchState, 1000);
+    } else {
+      toast('Restart error: ' + (data.message || data.error || 'Unknown'));
+    }
+  } catch (err) {
+    toast('Network error during restart');
+  }
+  btn.textContent = 'Restart Colony';
+  btn.disabled = false;
 }
 
 // ═══════════════════════════════════════════════════════════════════
