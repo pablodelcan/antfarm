@@ -50,7 +50,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       addAnts: 'Spawning 5 new ants',
       dropFood: 'Dropping food near colony',
       togglePause: 'Toggling simulation pause',
-      setSpeed: `Speed set to ${value}x`
+      setSpeed: `Speed set to ${value}x`,
+      resetColony: 'Colony will be reset on next tick'
     };
 
     return res.status(200).json({

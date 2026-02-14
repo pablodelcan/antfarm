@@ -93,6 +93,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               // Stored but not changing tick count (would need different approach)
               console.log('Admin: Speed set to ' + cmd.value);
               break;
+            case 'resetColony':
+              // Wipe state — will be recreated fresh below
+              await kv.del('colony:state');
+              await kv.del('colony:viewer-state');
+              await kv.del('colony:directive');
+              state = simulation.createColony();
+              console.log('Admin: Colony reset to fresh state');
+              break;
           }
         }
         // Clear processed commands

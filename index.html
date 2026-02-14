@@ -222,6 +222,7 @@
   <button onclick="adminAction('addAnts')">+5 Ants</button>
   <button onclick="adminAction('dropFood')">Drop Food</button>
   <button id="pauseBtn" onclick="adminAction('togglePause')">Pause</button>
+  <button onclick="if(confirm('Reset colony? This will start fresh.')) adminAction('resetColony')" style="background:#8b0000;color:#fff">Reset Colony</button>
   <div class="speed-ctrl">
     <span>Speed</span>
     <input type="range" id="speedSlider" min="1" max="5" value="1" oninput="adminAction('setSpeed', this.value)">
