@@ -61,9 +61,15 @@ async function begin() {
   const saved = await AF.network.fetchCheckpoint();
 
   if (saved && saved.checkpoint) {
-    state = AF.colony.deserialize(saved.checkpoint);
-    if (saved.directive) AF.colony.applyDirective(state, saved.directive);
-    elStatusText.textContent = 'Colony restored — Day ' + state.simDay;
+    try {
+      state = AF.colony.deserialize(saved.checkpoint);
+      if (saved.directive) AF.colony.applyDirective(state, saved.directive);
+      elStatusText.textContent = 'Colony restored — Day ' + state.simDay;
+    } catch (e) {
+      console.warn('Failed to restore checkpoint, starting fresh:', e);
+      state = AF.colony.create();
+      elStatusText.textContent = 'New colony started';
+    }
   } else {
     state = AF.colony.create();
     elStatusText.textContent = 'New colony started';
