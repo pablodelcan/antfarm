@@ -132,32 +132,45 @@ AF.terrain._reinforce = function(state, x, y) {
   }
 };
 
-// ── Sand deposit (ant hauls sand to surface) ──
+// ── Sand deposit (ant hauls sand to surface — builds mounds) ──
 
 AF.terrain.depositSand = function(state, gx) {
   const { COLS, ROWS, SURFACE } = AF;
-  let depositY = SURFACE;
-  for (let y = Math.max(0, SURFACE - 10); y < Math.min(ROWS, SURFACE + 5); y++) {
-    if (AF.terrain.isSolid(state, gx, y)) { depositY = y - 1; break; }
+
+  // Scatter deposit position near entrance (+/- a few cells)
+  let nx = gx + ((Math.random() * 5 - 2.5) | 0);
+  nx = Math.max(2, Math.min(COLS - 3, nx));
+
+  // Find the topmost solid cell in this column near the surface
+  // Scan from well above surface down to find where to stack
+  let depositY = -1;
+  for (let y = Math.max(0, SURFACE - 20); y < Math.min(ROWS, SURFACE + 3); y++) {
+    if (state.grid[y * COLS + nx] > 0) {
+      depositY = y - 1; // place above the first solid cell
+      break;
+    }
   }
-  if (depositY < 2) return;
-  let nx = gx;
-  if (Math.random() > 0.82) {
-    nx += Math.random() < 0.5 ? -1 : 1;
-    nx = Math.max(1, Math.min(COLS - 2, nx));
-  }
-  if (depositY >= 0 && depositY < ROWS && !AF.terrain.isSolid(state, nx, depositY)) {
-    state.grid[depositY * COLS + nx] = 1;
+
+  // If no solid found (empty column), place at surface level
+  if (depositY < 0) depositY = SURFACE - 1;
+
+  // Don't build mounds too tall (max ~15 cells above ground)
+  if (depositY < SURFACE - 15) return;
+
+  // Deposit the sand grain
+  if (depositY >= 0 && depositY < ROWS && !state.grid[depositY * COLS + nx]) {
+    state.grid[depositY * COLS + nx] = 1; // loose sand (can slide with gravity)
     state.terrainDirty = true;
   }
 };
 
 // ── Gravity — loose sand (hardness 1-2) falls ──
+// Starts above surface to handle mound physics
 
 AF.terrain.gravity = function(state) {
   const { COLS, ROWS, SURFACE } = AF;
   const cellAt = AF.terrain.cellAt;
-  for (let y = ROWS - 2; y >= SURFACE; y--) {
+  for (let y = ROWS - 2; y >= Math.max(0, SURFACE - 20); y--) {
     for (let x = 0; x < COLS; x++) {
       const v = state.grid[y * COLS + x];
       if (!v || v > 2) continue;

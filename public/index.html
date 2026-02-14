@@ -126,13 +126,6 @@
     animation: pulse 2s infinite;
   }
   @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
-  .bottombar .restart-btn {
-    font-size: 0.58rem; color: #ccc; letter-spacing: 0.04em;
-    background: none; border: 1px solid #e0e0e0; padding: 2px 10px;
-    cursor: pointer; border-radius: 3px; margin-left: 12px; transition: all 0.2s;
-  }
-  .bottombar .restart-btn:hover { color: #888; border-color: #aaa; }
-
   /* ── Toast ── */
   .toast {
     position: fixed; bottom: 48px; left: 50%; transform: translateX(-50%) translateY(8px);
@@ -209,7 +202,6 @@
       <span class="dot"></span>
       <span id="statusText">Connecting...</span>
     </div>
-    <button class="restart-btn" onclick="restartColony()">Restart Colony</button>
   </div>
 </div>
 

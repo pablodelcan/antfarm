@@ -156,16 +156,19 @@ AF.colony.dropAnts = function(state, n) {
   for (let i = 0; i < n; i++) {
     const ant = AF.ant.create(
       AF.W * 0.3 + Math.random() * AF.W * 0.4,
-      AF.SURFACE_PX - AF.CELL * 3,
+      AF.SURFACE_PX - AF.CELL * 2,
       false
     );
+    ant.state = AF.ST.IDLE;
+    ant.vy = 0;
     state.ants.push(ant);
   }
 };
 
 AF.colony.dropFood = function(state) {
+  // Drop food on the surface, not underground
   const cx = AF.W * 0.2 + Math.random() * AF.W * 0.6;
-  const cy = AF.SURFACE_PX + AF.CELL * (5 + Math.random() * 30);
+  const cy = AF.SURFACE_PX - AF.CELL * 2;
   state.foods.push({ x: cx, y: cy, amount: 8 + (Math.random() * 8) | 0 });
 };
 

@@ -39,11 +39,39 @@ AF.renderer.terrain = function(ctx, state) {
     const depthRange = H - SURFACE_PX;
     const pixelHash = AF.terrain.pixelHash;
 
-    // Sky
+    // Sky (may be overwritten by mound sand below)
     for (let y = 0; y < SURFACE_PX; y++) {
       for (let x = 0; x < W; x++) {
         const i = (y * W + x) * 4;
         d[i] = 238; d[i + 1] = 235; d[i + 2] = 228; d[i + 3] = 255;
+      }
+    }
+
+    // Sand mounds above surface — deposited sand sits on top of ground
+    for (let py = Math.max(0, SURFACE_PX - 50); py < SURFACE_PX; py++) {
+      const gy = (py / CELL) | 0;
+      for (let px = 0; px < W; px++) {
+        const gx = (px / CELL) | 0;
+        const v = cellAt(gx, gy);
+        if (v > 0) {
+          const i = (py * W + px) * 4;
+          const pixHash = pixelHash(px, py);
+          // Lighter mound sand color (sun-exposed, sandy brown)
+          let r = SAND_R + 8 + (pixHash - 0.5) * 14;
+          let g = SAND_G + 5 + (pixHash - 0.5) * 10;
+          let b = SAND_B + 3 + (pixHash - 0.5) * 8;
+          // Slight edge shadow on mound edges
+          const hasAirLeft  = !cellAt(gx - 1, gy);
+          const hasAirRight = !cellAt(gx + 1, gy);
+          const hasAirAbove = !cellAt(gx, gy - 1);
+          if (hasAirLeft || hasAirRight || hasAirAbove) {
+            r *= 0.92; g *= 0.92; b *= 0.92;
+          }
+          d[i]     = Math.max(0, Math.min(255, r)) | 0;
+          d[i + 1] = Math.max(0, Math.min(255, g)) | 0;
+          d[i + 2] = Math.max(0, Math.min(255, b)) | 0;
+          d[i + 3] = 255;
+        }
       }
     }
 

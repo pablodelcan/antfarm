@@ -202,9 +202,11 @@ function _think(state, ant, s) {
 
     // ── HAUL: carrying sand to surface ──
     case ST.HAUL:
-      // Reached surface? Deposit sand
+      // Reached surface? Deposit each sand grain to build mounds
       if (s.atSurface) {
-        AF.terrain.depositSand(state, s.gx);
+        for (let si = 0; si < ant.carryingSand; si++) {
+          AF.terrain.depositSand(state, s.gx);
+        }
         ant.carryingSand = 0;
         _changeState(ant, ST.IDLE);
         AF.ant.setThought(ant, 'Deposited sand');
