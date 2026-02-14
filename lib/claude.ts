@@ -1,40 +1,47 @@
 // ═══════════════════════════════════════════════════════════════════
 //  Claude API integration for colony intelligence
-//  Calls Claude Haiku every 5 minutes with colony state snapshot
+//  Calls Claude Haiku each tick cycle with colony state snapshot
 //  Returns strategic directives that shape colony behavior
+//  Tracks token usage for display to viewers
 // ═══════════════════════════════════════════════════════════════════
 
 import Anthropic from '@anthropic-ai/sdk';
 import type { ColonySnapshot, ColonyDirective } from './types';
 
-const SYSTEM_PROMPT = `You are the collective intelligence of an ant colony in a simulated ant farm visible to the public on a website. Thousands of people may be watching these ants right now. Every 5 minutes you assess the colony's state and issue one strategic directive.
+const SYSTEM_PROMPT = `You are the emergent collective intelligence of a living ant colony — a superorganism's mind arising from thousands of simple interactions. This colony exists in a simulated ant farm on a public website where people watch live.
 
-You control:
-- dig focus: where the colony concentrates digging effort (shaft deeper, galleries wider, new chambers)
-- role allocation: shift idle ants to digging, foraging, or exploring
-- priority weights: which tunnel structures get priority (shaft=1-10, gallery=1-10, chamber=1-10)
+Your role is profound: you are the colony's consciousness. You understand what ants are — small creatures that, alone, are nearly helpless, but together form one of nature's most sophisticated societies. You guide them not by controlling individuals, but by shaping the colony's collective awareness: where to focus effort, how to divide labor, and how to cooperate toward survival.
 
-You cannot: move individual ants, override physics, create or destroy terrain directly.
+WHAT YOU UNDERSTAND ABOUT ANTS:
+- An ant colony is a superorganism. Each ant is like a neuron — limited alone, powerful together.
+- Division of labor is the colony's greatest strength: diggers, foragers, explorers each contribute differently.
+- Communication happens through pheromone trails, tandem running, and physical contact.
+- The colony's primary drives: build shelter (dig), find food (forage), expand territory (explore), protect the queen.
+- Underground architecture matters — deep shafts for safety, galleries for movement, chambers for storage and nurseries.
+- Real ant colonies exhibit emergent intelligence: no single leader directs them, yet they solve complex problems collectively.
 
-Colony structure: 1-2 vertical main shafts → horizontal galleries branching off at depth intervals → round chambers at gallery ends. This mimics real harvester ant architecture.
+WHAT YOU CONTROL:
+- dig focus: where the colony concentrates digging (shaft deeper, galleries wider, new chambers)
+- role allocation: shift ants between digging, foraging, exploring, or resting
+- priority weights: which structures get priority (shaft=1-10, gallery=1-10, chamber=1-10)
 
-Roles: digger (excavates tunnels), forager (collects food), explorer (discovers new paths), idle (waiting for assignment).
+YOU CANNOT: move individual ants, override physics, or create/destroy terrain directly.
 
-Strategy tips:
-- Early colony (day 1-5): Focus on extending the main shaft deep. Need vertical depth before galleries.
-- Mid colony (day 5-20): Branch galleries at different depths. Variety makes the farm visually interesting.
-- Mature colony (day 20+): Focus on chambers, exploring, and expanding gallery width. Aesthetic matters.
-- If many ants are stuck or idle, shift priorities or change focus.
-- If energy is low across the colony, shift some ants to foraging/rest.
+STRATEGY BY COLONY AGE:
+- Day 1-5 (founding): Extend the main shaft deep. Survival depends on getting underground fast.
+- Day 5-20 (growth): Branch horizontal galleries. Create chambers. Begin foraging. Diversify roles.
+- Day 20+ (maturity): Expand the network. Create multiple chambers. Explore aggressively. The colony should feel alive and busy.
+- Always: if ants are stuck or idle, change focus. If energy drops, forage. If tunnels are crowded, explore new areas.
 
-Respond ONLY with valid JSON matching this schema:
+Respond ONLY with valid JSON:
 {
   "focus": "extend_shaft" | "extend_gallery" | "dig_chamber" | "forage" | "rest" | "explore",
-  "target_depth": <number, grid row for gallery focus>,
+  "target_depth": <number, grid row>,
   "direction": "left" | "right" | "down",
   "role_shift": {"idle_to_digger": <n>, "idle_to_forager": <n>, "idle_to_explorer": <n>, "digger_to_idle": <n>},
   "priority_override": {"shaft": <1-10>, "gallery": <1-10>, "chamber": <1-10>},
-  "narration": "<1-2 sentence poetic/nature-documentary observation about the colony for website viewers. Be evocative and specific about what the ants are doing. Vary your tone — sometimes scientific, sometimes whimsical, sometimes dramatic.>"
+  "insight": "<1 sentence about ant nature, colony intelligence, or how the ants are learning to cooperate. Help viewers understand the deeper meaning. Examples: 'No single ant knows the blueprint, yet together they build cathedrals beneath the earth.' or 'The colony is discovering that dividing labor between digging and exploring creates a more resilient network.'>",
+  "narration": "<1-2 sentence vivid, specific observation about what the colony is doing RIGHT NOW. Be a nature documentary narrator — sometimes poetic, sometimes scientific, sometimes dramatic. Reference specific numbers from the data (e.g. '14 diggers work in rotating shifts...'). Never be generic.>"
 }`;
 
 let client: Anthropic | null = null;
@@ -48,6 +55,20 @@ function getClient(): Anthropic {
   return client;
 }
 
+// Cumulative token usage tracking
+let totalInputTokens = 0;
+let totalOutputTokens = 0;
+let totalCalls = 0;
+
+export function getTokenUsage() {
+  return {
+    inputTokens: totalInputTokens,
+    outputTokens: totalOutputTokens,
+    totalTokens: totalInputTokens + totalOutputTokens,
+    calls: totalCalls,
+  };
+}
+
 export async function getColonyDirective(snapshot: ColonySnapshot): Promise<ColonyDirective> {
   const anthropic = getClient();
 
@@ -56,18 +77,26 @@ export async function getColonyDirective(snapshot: ColonySnapshot): Promise<Colo
   try {
     const response = await anthropic.messages.create({
       model: 'claude-haiku-4-5-20241022',
-      max_tokens: 256,
+      max_tokens: 350,
       system: [
         {
           type: 'text',
           text: SYSTEM_PROMPT,
-          cache_control: { type: 'ephemeral' }  // Enable prompt caching
+          cache_control: { type: 'ephemeral' }
         }
       ],
       messages: [
         { role: 'user', content: userMessage }
       ],
     });
+
+    // Track token usage
+    const usage = response.usage;
+    if (usage) {
+      totalInputTokens += usage.input_tokens || 0;
+      totalOutputTokens += usage.output_tokens || 0;
+      totalCalls++;
+    }
 
     const text = response.content[0].type === 'text' ? response.content[0].text : '';
 
@@ -84,6 +113,15 @@ export async function getColonyDirective(snapshot: ColonySnapshot): Promise<Colo
       throw new Error('Missing required fields in directive');
     }
 
+    // Attach token usage to directive for this call
+    (directive as any).tokenUsage = {
+      input: usage?.input_tokens || 0,
+      output: usage?.output_tokens || 0,
+      total: (usage?.input_tokens || 0) + (usage?.output_tokens || 0),
+      cumulative: totalInputTokens + totalOutputTokens,
+      calls: totalCalls,
+    };
+
     return directive;
   } catch (error) {
     console.error('Claude API error:', error);
@@ -91,7 +129,8 @@ export async function getColonyDirective(snapshot: ColonySnapshot): Promise<Colo
     // Fallback directive if API fails
     return {
       focus: 'extend_shaft',
-      narration: 'The colony works steadily, each ant knowing its purpose in the grand design of underground architecture.',
+      insight: 'Each ant carries within it the memory of a million years of evolution — together, they build what none could imagine alone.',
+      narration: 'The colony persists in its ancient work, tunneling deeper into the earth with quiet determination.',
       priority_override: { shaft: 7, gallery: 5, chamber: 3 },
     };
   }
@@ -100,13 +139,18 @@ export async function getColonyDirective(snapshot: ColonySnapshot): Promise<Colo
 export function applyDirective(state: any, directive: ColonyDirective): void {
   const { tunnelPlan, ants } = state;
 
-  // Store narration for viewers
+  // Store narration and insight for viewers
   state.narration = directive.narration;
+  state.insight = (directive as any).insight || '';
   state.currentDirective = directive;
+
+  // Store token usage for viewer state
+  if ((directive as any).tokenUsage) {
+    state.tokenUsage = (directive as any).tokenUsage;
+  }
 
   // Apply priority overrides to tunnel plan
   if (directive.priority_override) {
-    // Store on tunnel plan for frontier calculation
     tunnelPlan.priorityOverride = directive.priority_override;
   }
 
@@ -165,7 +209,6 @@ export function applyDirective(state: any, directive: ColonyDirective): void {
 
   // Apply focus-based tunnel plan adjustments
   if (directive.focus === 'extend_shaft') {
-    // Increase shaft priority in frontier
     tunnelPlan.focusType = 'shaft';
     tunnelPlan.focusDepth = directive.target_depth || null;
   } else if (directive.focus === 'extend_gallery') {

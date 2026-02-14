@@ -80,11 +80,17 @@
     margin-left: 14px;
   }
   .intel-roles .role-count { color: #777; font-weight: 500; }
-  .intel-narration {
+  .intel-tokens {
+    font-size: 0.55rem; color: #c084fc; letter-spacing: 0.03em;
+    font-variant-numeric: tabular-nums; white-space: nowrap; flex-shrink: 0;
+    margin-left: 14px; opacity: 0.8;
+  }
+  .intel-tokens .tok-num { font-weight: 500; }
+  .intel-insight {
     font-family: 'EB Garamond', serif; font-size: 0.78rem;
-    color: #999; font-style: italic; margin-left: auto;
+    color: #888; font-style: italic; margin-left: auto;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    max-width: 380px; padding-left: 14px;
+    max-width: 420px; padding-left: 14px;
   }
   .canvas-wrap {
     flex: 1; position: relative; overflow: hidden;
@@ -180,7 +186,8 @@
     <div class="intel-divider"></div>
     <div class="intel-focus" id="intelFocus">Waiting for directive...</div>
     <div class="intel-roles" id="intelRoles"></div>
-    <div class="intel-narration" id="intelNarration"></div>
+    <div class="intel-tokens" id="intelTokens"></div>
+    <div class="intel-insight" id="intelInsight"></div>
   </div>
   <div class="canvas-wrap" id="wrap">
     <canvas id="c"></canvas>
@@ -377,7 +384,7 @@ async function fetchState() {
     // Intelligence panel data
     if (data.directive) {
       currentDirective = data.directive;
-      updateAIPanel(data.directive, data.roleCounts);
+      updateAIPanel(data.directive, data.roleCounts, data.tokenUsage, data.insight);
     }
     if (data.roleCounts) {
       currentRoleCounts = data.roleCounts;
@@ -425,7 +432,7 @@ const FOCUS_LABELS = {
   explore: 'Exploring new paths'
 };
 
-function updateAIPanel(directive, roleCounts) {
+function updateAIPanel(directive, roleCounts, tokenUsage, insight) {
   const panel = document.getElementById('aiPanel');
   panel.classList.add('show');
 
@@ -448,7 +455,6 @@ function updateAIPanel(directive, roleCounts) {
   document.getElementById('intelFocus').textContent = focusText;
 
   if (roleCounts) {
-    const total = roleCounts.digger + roleCounts.forager + roleCounts.explorer + roleCounts.idle;
     document.getElementById('intelRoles').innerHTML =
       '<span class="role-count">' + roleCounts.digger + '</span> digging · ' +
       '<span class="role-count">' + roleCounts.forager + '</span> foraging · ' +
@@ -456,9 +462,26 @@ function updateAIPanel(directive, roleCounts) {
       '<span class="role-count">' + roleCounts.idle + '</span> idle';
   }
 
-  if (directive.narration) {
-    document.getElementById('intelNarration').textContent = '"' + directive.narration + '"';
+  // Token usage
+  if (tokenUsage && tokenUsage.total > 0) {
+    const cumulative = tokenUsage.cumulative || tokenUsage.total;
+    document.getElementById('intelTokens').innerHTML =
+      '<span class="tok-num">' + formatTokens(cumulative) + '</span> tokens · ' +
+      '<span class="tok-num">' + (tokenUsage.calls || 1) + '</span> thoughts';
   }
+
+  // Insight (Claude's understanding of ant nature)
+  if (insight) {
+    document.getElementById('intelInsight').textContent = insight;
+  } else if (directive.narration) {
+    document.getElementById('intelInsight').textContent = directive.narration;
+  }
+}
+
+function formatTokens(n) {
+  if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+  if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
+  return n.toString();
 }
 
 // ═══════════════════════════════════════════════════════════════════

@@ -46,6 +46,7 @@ export interface ColonyDirective {
     gallery?: number;
     chamber?: number;
   };
+  insight?: string;
   narration: string;
 }
 
@@ -96,8 +97,10 @@ export interface ViewerState {
   totalDug: number;
   simDay: number;
   narration: string;
+  insight: string;
   directive: ColonyDirective | null;
   roleCounts: { digger: number; forager: number; explorer: number; idle: number };
+  tokenUsage: { input: number; output: number; total: number; cumulative: number; calls: number } | null;
   timestamp: number;
   cols: number;
   rows: number;

@@ -34,10 +34,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // Merge directive narration into viewer state
+    // Merge directive data into viewer state
     const state = viewerState as any;
-    if (directive && (directive as any).narration) {
-      state.narration = (directive as any).narration;
+    if (directive) {
+      const d = directive as any;
+      if (d.narration) state.narration = d.narration;
+      if (d.insight) state.insight = d.insight;
+      if (d.tokenUsage) state.tokenUsage = d.tokenUsage;
     }
 
     return res.status(200).json(state);
