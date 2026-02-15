@@ -940,49 +940,43 @@ function _moveEnter(state, ant, s, spd) {
 
 function _moveDig(state, ant, s, spd) {
   const depthBelow = s.gy - AF.SURFACE;
-  const nearSurface = depthBelow < 40;
+  const inShaft = depthBelow < 60;  // wider zone for clean shaft
   const goals = state.colonyGoals;
 
   // Natural heading perturbation (branching chance tunable by AI)
-  const branchChance = (state.tuning && state.tuning.branchingChance) || 0.15;
-  const effectiveBranch = nearSurface ? 0.002 : B_BRANCH_CHANCE * (1 + branchChance);
-  if (Math.random() < effectiveBranch) {
-    ant.digAngle += (Math.random() - 0.5) * (nearSurface ? 0.2 : 0.6);
-  }
-
-  // Near surface: force straight down for clean shaft
-  if (nearSurface) {
-    ant.digAngle += (Math.PI * 0.5 - ant.digAngle) * 0.5;
-    if (state.entranceX > 0) {
-      const targetX = state.entranceX * AF.CELL + AF.CELL / 2;
-      const drift = Math.abs(ant.x - targetX);
-      if (drift > AF.CELL * 1) {
-        ant.x = targetX;
-        ant.vx = 0;
-      } else {
-        ant.vx += (targetX - ant.x) * 0.2;
-      }
+  // Suppress branching entirely in the shaft zone to keep it clean
+  if (!inShaft) {
+    const branchChance = (state.tuning && state.tuning.branchingChance) || 0.15;
+    const effectiveBranch = B_BRANCH_CHANCE * (1 + branchChance);
+    if (Math.random() < effectiveBranch) {
+      ant.digAngle += (Math.random() - 0.5) * 0.6;
     }
   }
 
-  // Chamber digging: when in chamber phase and deep enough, widen horizontally
-  // Real chambers are flat & wide (pancake-shaped), same height as tunnels
-  if (goals && goals.phase === 'chamber' && depthBelow > 30) {
-    if (ant.digCount > 5 && ant.digCount % 6 === 0) {
-      // Dig 1-2 cells to the left and right (horizontal widening only)
-      for (const dx of [-1, 1, -2, 2]) {
-        const cx = s.gx + dx;
-        if (AF.terrain.isSolid(state, cx, s.gy) && ant.carryingSand < ant.maxSandCarry) {
-          const dug = AF.terrain.dig(state, cx, s.gy);
-          if (dug) ant.carryingSand++;
-        }
+  // In shaft zone: force straight down at entranceX for clean, narrow shaft
+  if (inShaft && state.entranceX > 0) {
+    ant.digAngle = Math.PI * 0.5; // strictly downward
+    const targetX = state.entranceX * AF.CELL + AF.CELL / 2;
+    ant.x = targetX;
+    ant.vx = 0;
+  }
+
+  // Chamber digging: only in chamber phase, deep enough, limited widening
+  // Dig 1 cell left OR right (not both sides at once), less frequently
+  if (goals && goals.phase === 'chamber' && depthBelow > 60) {
+    if (ant.digCount > 8 && ant.digCount % 10 === 0) {
+      const dx = Math.random() < 0.5 ? -1 : 1;
+      const cx = s.gx + dx;
+      if (AF.terrain.isSolid(state, cx, s.gy) && ant.carryingSand < ant.maxSandCarry) {
+        const dug = AF.terrain.dig(state, cx, s.gy);
+        if (dug) ant.carryingSand++;
       }
       AF.ant.setThought(ant, 'Widening chamber');
     }
   }
 
-  // Follow dig pheromone gradient
-  if (s.digGrad.angle !== null && Math.random() < 0.3) {
+  // Follow dig pheromone gradient (not in shaft)
+  if (!inShaft && s.digGrad.angle !== null && Math.random() < 0.3) {
     ant.digAngle += (s.digGrad.angle - ant.digAngle) * 0.1;
   }
 
@@ -995,7 +989,8 @@ function _moveDig(state, ant, s, spd) {
 
   // Dig ahead — ALWAYS pick up sand (no vanishing!)
   if (ant.digCD <= 0 && ant.carryingSand < ant.maxSandCarry) {
-    const dgx = s.gx + Math.round(Math.cos(ant.heading) * 1.5);
+    // In shaft zone, dig strictly at entranceX column
+    const dgx = inShaft ? state.entranceX : s.gx + Math.round(Math.cos(ant.heading) * 1.5);
     const dgy = s.gy + Math.round(Math.sin(ant.heading) * 1.5);
     if (AF.terrain.isSolid(state, dgx, dgy)) {
       const dug = AF.terrain.dig(state, dgx, dgy);
@@ -1012,18 +1007,8 @@ function _moveDig(state, ant, s, spd) {
       const dug = AF.terrain.dig(state, s.gx, s.gy);
       if (dug) ant.carryingSand = Math.min(ant.carryingSand + 1, ant.maxSandCarry);
     }
-    // Tunnels stay narrow (1-2 cells wide) like real ant tunnels
-    // Only widen slightly at branch points for turning room
-    if (!nearSurface && ant.digCount % 12 === 0 && ant.carryingSand < ant.maxSandCarry) {
-      // Occasional perpendicular dig for just enough room to turn
-      const perpAngle = ant.heading + (Math.random() < 0.5 ? Math.PI/2 : -Math.PI/2);
-      const px = s.gx + Math.round(Math.cos(perpAngle));
-      const py = s.gy + Math.round(Math.sin(perpAngle));
-      if (AF.terrain.isSolid(state, px, py)) {
-        const dug = AF.terrain.dig(state, px, py);
-        if (dug) ant.carryingSand = Math.min(ant.carryingSand + 1, ant.maxSandCarry);
-      }
-    }
+    // No perpendicular widening — tunnels stay 1 cell wide like real ant tunnels
+    // Chambers handle widening separately
   }
 
   // Don't dig above surface
@@ -1055,13 +1040,10 @@ function _moveUp(state, ant, s, spd) {
   }
 
   if (!foundOpen && ant.digCD <= 0) {
+    // Only dig straight up — no sideways widening
     if (AF.terrain.isSolid(state, s.gx, s.gy - 1)) {
       AF.terrain.dig(state, s.gx, s.gy - 1);
       ant.digCD = B_DIG_CD_BASE;
-    }
-    const side = Math.random() < 0.5 ? -1 : 1;
-    if (AF.terrain.isSolid(state, s.gx + side, s.gy - 1)) {
-      AF.terrain.dig(state, s.gx + side, s.gy - 1);
     }
   }
 

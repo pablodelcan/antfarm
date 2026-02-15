@@ -4,7 +4,7 @@
   "private": true,
   "description": "A living ant colony simulation powered by Claude AI — runs at 60fps in the browser",
   "scripts": {
-    "dev": "vercel dev",
+    "dev": "node server.js",
     "build": "echo 'No build step needed'"
   },
   "dependencies": {

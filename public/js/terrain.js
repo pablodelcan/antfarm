@@ -137,7 +137,7 @@ AF.terrain._reinforce = function(state, x, y) {
 // entrance, with the hole itself kept clear at the center. Deposits are
 // concentrated near the entrance (but not ON it), forming a natural cone.
 
-AF.terrain.ENTRANCE_CLEAR_RADIUS = 3; // cells on each side of entrance kept open
+AF.terrain.ENTRANCE_CLEAR_RADIUS = 2; // cells on each side of entrance kept open
 
 AF.terrain.depositSand = function(state, gx) {
   const { COLS, ROWS, SURFACE } = AF;
