@@ -16,8 +16,8 @@ let mouseX = 0, mouseY = 0;
 let canvas, ctx;
 
 // ── HUD elements (cached) ──
-let elSAnts, elSTunnel, elSChambers, elSDay;
-let elStatusText, elTooltip;
+let elSAnts, elSTunnel, elSChambers, elSDay, elSDay2;
+let elTooltip;
 let elTtName, elTtState, elTtEnergy, elTtRole, elTtThought;
 let elIntelFocus, elIntelRoles, elIntelTokens, elIntelInsight;
 let elAiNarration;
@@ -31,7 +31,8 @@ async function begin() {
   // Hide intro, show app
   document.querySelector('.intro').classList.add('hide');
   setTimeout(() => { document.querySelector('.intro').style.display = 'none'; }, 800);
-  document.getElementById('app').style.display = 'block';
+  const appEl = document.getElementById('app');
+  appEl.style.display = 'flex';
 
   // Canvas setup
   canvas = document.getElementById('c');
@@ -45,7 +46,7 @@ async function begin() {
   elSTunnel = document.getElementById('sTunnel');
   elSChambers = document.getElementById('sChambers');
   elSDay = document.getElementById('sDay');
-  elStatusText = document.getElementById('statusText');
+  elSDay2 = document.getElementById('sDay2');
   elTooltip = document.getElementById('tooltip');
   elTtName = document.getElementById('ttName');
   elTtState = document.getElementById('ttState');
@@ -121,12 +122,16 @@ function gameLoop() {
   AF.renderer.terrain(ctx, state);
   AF.renderer.silhouette(ctx);
   AF.renderer.chamberLabels(ctx, state.chambers);
-  AF.renderer.food(ctx, state.foods, state.foodStores);
+  AF.renderer.food(ctx, null, state.foodStores); // underground food first
   AF.renderer.brood(ctx, state.brood);
   AF.renderer.particles(ctx, particles, terrainParticles);
   for (const ant of state.ants) {
     AF.renderer.ant(ctx, ant, hoveredAnt, particles);
   }
+  // Draw surface mounds AFTER ants — mounds appear in front (depth effect)
+  AF.renderer.surfaceMounds(ctx, state);
+  // Surface food drawn ON TOP of mounds so it's visible
+  AF.renderer.food(ctx, state.foods, null);
   AF.renderer.fallingObjects(ctx, fallingObjects);
   AF.renderer.frame(ctx);
   AF.renderer.glass(ctx);
@@ -179,7 +184,22 @@ function tickParticles() {
     f.y += f.vy; f.x += f.vx; f.vx *= 0.99; f.rotation += f.rotSpeed;
     if (f.y > AF.SURFACE_PX - 5) {
       f.y = AF.SURFACE_PX - 5; f.vy *= -0.3;
-      if (Math.abs(f.vy) < 0.5) fallingObjects.splice(i, 1);
+      if (Math.abs(f.vy) < 0.5) {
+        // Impact effect — burst of particles on landing
+        if (f.type === 'food') {
+          for (let j = 0; j < 4; j++) {
+            particles.push({
+              x: f.x, y: f.y,
+              vx: (Math.random() - 0.5) * 2,
+              vy: -Math.random() * 1.5 - 0.3,
+              life: 15 + (Math.random() * 10) | 0,
+              color: f.color || '#555',
+              size: 1.5,
+            });
+          }
+        }
+        fallingObjects.splice(i, 1);
+      }
     }
   }
 }
@@ -195,7 +215,7 @@ function updateHUD() {
   elSTunnel.textContent = pct + '%';
   elSChambers.textContent = state.chambers.length;
   elSDay.textContent = state.simDay;
-  if (elStatusText) elStatusText.textContent = 'Day ' + state.simDay;
+  if (elSDay2) elSDay2.textContent = state.simDay;
 
   // Brood display
   const elBrood = document.getElementById('sBrood');
@@ -366,12 +386,19 @@ function adminAction(action, value) {
     }
     toast('Added 5 ants');
   } else if (action === 'dropFood') {
-    AF.colony.dropFood(state);
+    // Create multiple visible food piles scattered across the surface
+    const numPiles = 3 + ((Math.random() * 3) | 0);
+    for (let p = 0; p < numPiles; p++) {
+      const fx = AF.W * 0.15 + Math.random() * AF.W * 0.7;
+      const fy = AF.SURFACE_PX - AF.CELL * 2;
+      state.foods.push({ x: fx, y: fy, amount: 3 + ((Math.random() * 5) | 0) });
+    }
+    // Drop visual falling food objects that land near the actual food
     const colors = ['#555', '#777', '#444'];
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < 10; i++) {
       fallingObjects.push({
         type: 'food',
-        x: AF.W * 0.35 + Math.random() * AF.W * 0.3,
+        x: AF.W * 0.15 + Math.random() * AF.W * 0.7,
         y: AF.FRAME + 5,
         vx: (Math.random() - 0.5) * 3, vy: Math.random() * 1.5,
         rotation: 0, rotSpeed: (Math.random() - 0.5) * 0.2,
@@ -419,15 +446,15 @@ function toast(msg) {
 function resizeCanvas() {
   if (!canvas) return;
   const aspect = AF.W / AF.H;
-  const wW = window.innerWidth, wH = window.innerHeight;
+  const wW = window.innerWidth;
+  // Available height = viewport minus top bar (28px) and bottom bar (24px)
+  const wH = window.innerHeight - 52;
 
   let cW, cH;
   if (wW / wH > aspect) {
-    // Window is wider than canvas aspect — fit height, letterbox sides
     cH = wH;
     cW = wH * aspect;
   } else {
-    // Window is taller — fit width, letterbox top/bottom
     cW = wW;
     cH = wW / aspect;
   }
@@ -437,3 +464,58 @@ function resizeCanvas() {
 }
 
 window.addEventListener('resize', resizeCanvas);
+
+// ═══════════════════════════════════════════════════════════════════
+//  AI INFO MODAL
+// ═══════════════════════════════════════════════════════════════════
+
+function showAiModal() {
+  const modal = document.getElementById('aiModal');
+  modal.classList.add('show');
+
+  // Populate with current state
+  const FOCUS_LABELS = {
+    extend_shaft: 'Extending main shaft',
+    extend_gallery: 'Widening galleries',
+    dig_chamber: 'Carving new chamber',
+    forage: 'Foraging for food',
+    rest: 'Colony resting',
+    explore: 'Exploring new paths',
+    nurse: 'Tending brood',
+  };
+
+  const focusEl = document.getElementById('aiModalFocus');
+  const rolesEl = document.getElementById('aiModalRoles');
+  const tokensEl = document.getElementById('aiModalTokens');
+  const callsEl = document.getElementById('aiModalCalls');
+
+  if (state && state.directive) {
+    focusEl.textContent = FOCUS_LABELS[state.directive.focus] || state.directive.focus || 'Observing';
+    if (state.directive.role_shift) {
+      const rs = state.directive.role_shift;
+      const parts = [];
+      if (rs.idle_to_digger) parts.push(rs.idle_to_digger + ' to digging');
+      if (rs.idle_to_forager) parts.push(rs.idle_to_forager + ' to foraging');
+      if (rs.idle_to_nurse) parts.push(rs.idle_to_nurse + ' to nursing');
+      rolesEl.textContent = parts.length ? parts.join(', ') : 'None';
+    } else {
+      rolesEl.textContent = 'None active';
+    }
+  } else {
+    focusEl.textContent = 'Observing colony';
+    rolesEl.textContent = 'Waiting for first analysis';
+  }
+
+  if (state && state.tokenUsage && state.tokenUsage.total > 0) {
+    const cum = state.tokenUsage.cumulative || state.tokenUsage.total;
+    tokensEl.textContent = formatTokens(cum) + ' tokens';
+    callsEl.textContent = (state.tokenUsage.calls || 1) + ' analyses';
+  } else {
+    tokensEl.textContent = 'Not yet used';
+    callsEl.textContent = 'Pending first analysis';
+  }
+}
+
+function hideAiModal(event) {
+  document.getElementById('aiModal').classList.remove('show');
+}

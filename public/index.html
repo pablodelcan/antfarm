@@ -33,15 +33,54 @@
   }
   .intro button:hover { border-color: #1a1a1a; background: #1a1a1a; color: #fff; }
 
-  /* ── App Layout — FULLSCREEN ── */
+  /* ── App Layout ── */
   .app {
     display: none; width: 100vw; height: 100vh;
     position: relative; overflow: hidden;
+    flex-direction: column;
   }
 
-  /* ── Canvas — fills entire viewport ── */
+  /* ── Top Bar — solid black strip ── */
+  .bar-top {
+    height: 28px; min-height: 28px;
+    background: #000;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 16px;
+    z-index: 20; position: relative;
+  }
+  .bar-top .title {
+    font-family: 'EB Garamond', serif; font-size: 0.88rem; font-weight: 400;
+    font-style: italic; color: #ccc; line-height: 1; white-space: nowrap;
+  }
+  .bar-top .stats {
+    display: flex; gap: 14px; font-size: 0.65rem; color: rgba(255,255,255,0.7);
+    align-items: center;
+  }
+  .bar-top .stat-group {
+    display: flex; align-items: center; gap: 3px; white-space: nowrap;
+  }
+  .bar-top .stat-label {
+    font-weight: 400; font-size: 0.6rem; color: rgba(255,255,255,0.4);
+  }
+  .bar-top .stat-val {
+    font-weight: 600; font-size: 0.65rem; font-variant-numeric: tabular-nums;
+    color: rgba(255,255,255,0.85);
+  }
+  .bar-top .ai-link {
+    display: flex; align-items: center; gap: 5px;
+    cursor: pointer; pointer-events: auto;
+    color: rgba(255,255,255,0.5); font-size: 0.6rem; font-weight: 600;
+    transition: color 0.2s;
+  }
+  .bar-top .ai-link:hover { color: rgba(255,255,255,0.9); }
+  .bar-top .ai-dot {
+    width: 4px; height: 4px; border-radius: 50%;
+    background: rgba(255,255,255,0.5);
+  }
+
+  /* ── Canvas Area — fills remaining space ── */
   .canvas-wrap {
-    position: absolute; inset: 0;
+    flex: 1; position: relative; overflow: hidden;
     display: flex; align-items: center; justify-content: center;
     background: #000;
   }
@@ -49,99 +88,70 @@
     display: block; cursor: crosshair;
   }
 
-  /* ── Overlay UI — floats on top of canvas ── */
-  .overlay-top {
-    position: absolute; top: 0; left: 0; right: 0;
-    display: flex; align-items: baseline; justify-content: space-between;
-    padding: 16px 24px 12px;
-    background: linear-gradient(to bottom, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0.15) 60%, transparent 100%);
-    pointer-events: none; z-index: 10;
-  }
-  .overlay-top .title {
-    font-family: 'EB Garamond', serif; font-size: 1.6rem; font-weight: 400;
-    font-style: italic; letter-spacing: -0.01em; line-height: 1;
-    color: #fff; pointer-events: auto;
-    text-shadow: 0 1px 3px rgba(0,0,0,0.3);
-  }
-  .overlay-top .stats {
-    display: flex; gap: 20px; font-size: 0.75rem; color: rgba(255,255,255,0.85);
-    align-items: baseline;
-  }
-  .overlay-top .stats .stat-group {
-    display: flex; align-items: baseline; gap: 5px;
-  }
-  .overlay-top .stats .stat-label {
-    font-weight: 400; font-size: 0.72rem; color: rgba(255,255,255,0.6);
-  }
-  .overlay-top .stats .stat-val {
-    font-weight: 700; font-size: 0.75rem; font-variant-numeric: tabular-nums;
-    color: #fff;
-  }
-
-  /* ── Intel Bar — below topbar ── */
-  .overlay-intel {
-    position: absolute; top: 48px; left: 0; right: 0;
+  /* ── Bottom Bar — solid black strip ── */
+  .bar-bottom {
+    height: 24px; min-height: 24px;
+    background: #000;
     display: flex; align-items: center; justify-content: space-between;
-    padding: 0 24px 8px;
-    font-size: 0.65rem; color: rgba(255,255,255,0.5); gap: 12px;
-    pointer-events: none; z-index: 10;
+    padding: 0 16px;
+    z-index: 20; position: relative;
   }
-  .overlay-intel .intel-left {
-    display: flex; align-items: center; gap: 10px;
-  }
-  .overlay-intel .intel-dot {
-    width: 5px; height: 5px; border-radius: 50%; background: rgba(255,255,255,0.7); flex-shrink: 0;
-  }
-  .overlay-intel .intel-label {
-    font-weight: 600; color: rgba(255,255,255,0.7); font-size: 0.65rem;
-  }
-  .overlay-intel .intel-focus {
-    font-family: 'EB Garamond', serif; font-style: italic; font-size: 0.78rem;
-    color: rgba(255,255,255,0.8); font-weight: 500;
-  }
-  .overlay-intel .intel-sep {
-    color: rgba(255,255,255,0.25); font-size: 0.68rem;
-  }
-  .overlay-intel .intel-roles {
-    color: rgba(255,255,255,0.45); font-size: 0.62rem; letter-spacing: 0.02em;
-  }
-  .overlay-intel .intel-right {
+  .bar-bottom .intel-left {
     display: flex; align-items: center; gap: 8px;
-    font-family: 'EB Garamond', serif; font-style: italic; font-size: 0.74rem;
-    color: rgba(255,255,255,0.4);
+    font-size: 0.58rem; color: rgba(255,255,255,0.45);
   }
-
-  /* ── Bottom Bar — overlay ── */
-  .overlay-bottom {
-    position: absolute; bottom: 0; left: 0; right: 0;
-    display: flex; align-items: center; justify-content: center;
-    padding: 12px 24px;
-    background: linear-gradient(to top, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0.1) 60%, transparent 100%);
-    pointer-events: none; z-index: 10;
+  .bar-bottom .intel-focus {
+    font-family: 'EB Garamond', serif; font-style: italic;
+    font-size: 0.72rem; color: rgba(255,255,255,0.65);
   }
-  .overlay-bottom .status {
-    font-size: 0.68rem; color: rgba(255,255,255,0.6); font-weight: 600;
-    display: flex; align-items: center; gap: 6px;
+  .bar-bottom .intel-roles {
+    color: rgba(255,255,255,0.35); font-size: 0.56rem;
   }
-  .overlay-bottom .status .dot {
-    width: 5px; height: 5px; border-radius: 50%; background: rgba(255,255,255,0.5);
+  .bar-bottom .intel-right {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 0.56rem; color: rgba(255,255,255,0.3);
   }
-
-  /* ── Viewers count ── */
-  .overlay-viewers {
-    position: absolute; bottom: 12px; right: 24px;
-    font-size: 0.62rem; color: rgba(255,255,255,0.35);
-    pointer-events: none; z-index: 10;
-    display: flex; align-items: center; gap: 5px;
-  }
-  .overlay-viewers .live-dot {
-    width: 6px; height: 6px; border-radius: 50%; background: #e74c3c;
+  .bar-bottom .live-dot {
+    width: 5px; height: 5px; border-radius: 50%; background: #e74c3c;
     animation: livePulse 2s ease-in-out infinite;
   }
   @keyframes livePulse {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.4; }
   }
+
+  /* ── AI Modal ── */
+  .ai-modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+    display: none; align-items: center; justify-content: center;
+    z-index: 200;
+  }
+  .ai-modal-overlay.show { display: flex; }
+  .ai-modal {
+    background: #111; border: 1px solid #333;
+    max-width: 480px; width: 90%; padding: 28px 32px;
+    color: #ddd; position: relative;
+  }
+  .ai-modal h2 {
+    font-family: 'EB Garamond', serif; font-size: 1.4rem; font-weight: 400;
+    font-style: italic; color: #fff; margin-bottom: 16px;
+  }
+  .ai-modal p {
+    font-size: 0.75rem; line-height: 1.7; color: rgba(255,255,255,0.7);
+    margin-bottom: 12px;
+  }
+  .ai-modal .ai-stat {
+    display: flex; justify-content: space-between;
+    font-size: 0.68rem; color: rgba(255,255,255,0.5);
+    padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+  .ai-modal .ai-stat .val { color: rgba(255,255,255,0.85); font-weight: 600; }
+  .ai-modal .close-btn {
+    position: absolute; top: 12px; right: 16px;
+    background: none; border: none; color: rgba(255,255,255,0.4);
+    font-size: 1.2rem; cursor: pointer; padding: 4px 8px;
+  }
+  .ai-modal .close-btn:hover { color: #fff; }
 
   /* ── Tooltip ── */
   .ant-tooltip {
@@ -193,57 +203,46 @@
 <div class="intro">
   <h1>Antfarm</h1>
   <div class="sub">A living colony powered by Claude AI</div>
-  <div class="sub2">v20</div>
+  <div class="sub2">v21</div>
   <button onclick="begin()">Enter</button>
 </div>
 
-<!-- Main App — Fullscreen -->
+<!-- Main App -->
 <div class="app" id="app">
-  <!-- Canvas fills entire viewport -->
+  <!-- Top black bar -->
+  <div class="bar-top">
+    <div class="title">Antfarm</div>
+    <div class="stats">
+      <div class="stat-group"><span class="stat-label">Pop</span><span class="stat-val" id="sAnts">0</span></div>
+      <div class="stat-group"><span class="stat-label">Brood</span><span class="stat-val" id="sBrood">0</span></div>
+      <div class="stat-group"><span class="stat-label">Dug</span><span class="stat-val" id="sTunnel">0%</span></div>
+      <div class="stat-group"><span class="stat-label">Chmbrs</span><span class="stat-val" id="sChambers">0</span></div>
+      <div class="stat-group"><span class="stat-label">Food</span><span class="stat-val" id="sStored">0</span></div>
+      <div class="stat-group"><span class="stat-label">Day</span><span class="stat-val" id="sDay">1</span></div>
+    </div>
+    <div class="ai-link" id="aiLink" onclick="showAiModal()">
+      <span class="ai-dot"></span>
+      <span>Claude AI</span>
+    </div>
+  </div>
+
+  <!-- Canvas fills remaining space -->
   <div class="canvas-wrap" id="wrap">
     <canvas id="c"></canvas>
   </div>
 
-  <!-- Overlay: Top bar -->
-  <div class="overlay-top">
-    <div class="title">Antfarm</div>
-    <div class="stats">
-      <div class="stat-group"><span class="stat-label">Population</span><span class="stat-val" id="sAnts">0</span></div>
-      <div class="stat-group"><span class="stat-label">Brood</span><span class="stat-val" id="sBrood">0</span></div>
-      <div class="stat-group"><span class="stat-label">Tunneled</span><span class="stat-val" id="sTunnel">0%</span></div>
-      <div class="stat-group"><span class="stat-label">Chambers</span><span class="stat-val" id="sChambers">0</span></div>
-      <div class="stat-group"><span class="stat-label">Stored</span><span class="stat-val" id="sStored">0</span></div>
-      <div class="stat-group"><span class="stat-label">Day</span><span class="stat-val" id="sDay">1</span></div>
-    </div>
-  </div>
-
-  <!-- Overlay: Intel bar -->
-  <div class="overlay-intel" id="intelBar">
+  <!-- Bottom black bar -->
+  <div class="bar-bottom">
     <div class="intel-left">
-      <span class="intel-dot"></span>
-      <span class="intel-label">Claude AI</span>
-      <span class="intel-sep">|</span>
       <span class="intel-focus" id="intelFocusDisplay">Observing colony</span>
       <span class="intel-roles" id="intelRolesDisplay"></span>
-      <span class="intel-roles" id="intelTokensDisplay"></span>
     </div>
     <div class="intel-right">
       <span id="intelInsightDisplay"></span>
+      <span class="live-dot"></span>
+      <span>LIVE</span>
+      <span>Day <span id="sDay2">1</span></span>
     </div>
-  </div>
-
-  <!-- Overlay: Bottom bar -->
-  <div class="overlay-bottom">
-    <div class="status">
-      <span class="dot"></span>
-      <span id="statusText">Day 1</span>
-    </div>
-  </div>
-
-  <!-- Overlay: Live indicator -->
-  <div class="overlay-viewers" id="viewersDisplay">
-    <span class="live-dot"></span>
-    <span>LIVE</span>
   </div>
 </div>
 
@@ -267,6 +266,29 @@
 
 <div class="toast" id="toast"></div>
 
+<!-- AI Info Modal -->
+<div class="ai-modal-overlay" id="aiModal" onclick="hideAiModal(event)">
+  <div class="ai-modal" onclick="event.stopPropagation()">
+    <button class="close-btn" onclick="hideAiModal()">&times;</button>
+    <h2>How Claude AI Powers This Colony</h2>
+    <p>
+      This ant colony is guided by <strong>Claude</strong> (Anthropic's AI). Every few minutes, Claude analyzes the colony's state &mdash; population, tunnel depth, food stores, brood count &mdash; and issues strategic directives that shape the ants' behavior.
+    </p>
+    <p>
+      Claude decides the colony's <strong>focus</strong> (dig deeper, forage for food, tend brood, explore), adjusts <strong>role assignments</strong> (shifting idle ants to diggers or nurses), and tunes parameters like exploration range and rest thresholds.
+    </p>
+    <p>
+      A daily review provides longer-term evolutionary tuning &mdash; adjusting the colony's DNA-like parameters based on overall health trends.
+    </p>
+    <div style="margin-top:16px">
+      <div class="ai-stat"><span>Current focus</span><span class="val" id="aiModalFocus">Observing</span></div>
+      <div class="ai-stat"><span>Role shifts</span><span class="val" id="aiModalRoles">&mdash;</span></div>
+      <div class="ai-stat"><span>Token usage</span><span class="val" id="aiModalTokens">&mdash;</span></div>
+      <div class="ai-stat"><span>AI thoughts</span><span class="val" id="aiModalCalls">&mdash;</span></div>
+    </div>
+  </div>
+</div>
+
 <!-- Hidden Admin Panel -->
 <div class="admin-panel" id="adminPanel">
   <button onclick="adminAction('addAnts')">+5 Ants</button>
@@ -275,15 +297,15 @@
 </div>
 
 <!-- Scripts -->
-<script src="/js/constants.js?v=23"></script>
-<script src="/js/terrain.js?v=23"></script>
-<script src="/js/pheromones.js?v=23"></script>
-<script src="/js/ant.js?v=23"></script>
-<script src="/js/behavior.js?v=23"></script>
-<script src="/js/colony.js?v=23"></script>
-<script src="/js/renderer.js?v=23"></script>
-<script src="/js/network.js?v=23"></script>
-<script src="/js/main.js?v=23"></script>
+<script src="/js/constants.js?v=24"></script>
+<script src="/js/terrain.js?v=24"></script>
+<script src="/js/pheromones.js?v=24"></script>
+<script src="/js/ant.js?v=24"></script>
+<script src="/js/behavior.js?v=24"></script>
+<script src="/js/colony.js?v=24"></script>
+<script src="/js/renderer.js?v=24"></script>
+<script src="/js/network.js?v=24"></script>
+<script src="/js/main.js?v=24"></script>
 
 </body>
 </html>

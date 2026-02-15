@@ -9,6 +9,8 @@ AF.renderer = {};
 
 // Offscreen terrain canvas (cached between frames when terrain unchanged)
 let _tOff, _tCtx, _terrainImageData;
+// Offscreen mound overlay (above-surface terrain, rendered AFTER ants for depth)
+let _mOff, _mCtx, _moundImageData;
 
 AF.renderer.init = function(canvas) {
   _tOff = document.createElement('canvas');
@@ -16,6 +18,12 @@ AF.renderer.init = function(canvas) {
   _tOff.height = AF.H;
   _tCtx = _tOff.getContext('2d');
   _terrainImageData = null;
+
+  _mOff = document.createElement('canvas');
+  _mOff.width = AF.W;
+  _mOff.height = AF.H;
+  _mCtx = _mOff.getContext('2d');
+  _moundImageData = null;
 };
 
 // ═══════════════════════════════════════════════════════════════════
@@ -47,23 +55,8 @@ AF.renderer.terrain = function(ctx, state) {
       }
     }
 
-    // Sand mounds above surface — same sand color
-    for (let py = Math.max(0, SURFACE_PX - 50); py < SURFACE_PX; py++) {
-      const gy = (py / CELL) | 0;
-      for (let px = 0; px < W; px++) {
-        const gx = (px / CELL) | 0;
-        const v = cellAt(gx, gy);
-        if (v > 0) {
-          const i = (py * W + px) * 4;
-          const pixHash = pixelHash(px, py);
-          const noise = (pixHash - 0.5) * 4;
-          d[i]     = Math.min(255, SAND_R + noise) | 0;
-          d[i + 1] = Math.min(255, SAND_G + noise) | 0;
-          d[i + 2] = Math.min(255, SAND_B + noise) | 0;
-          d[i + 3] = 255;
-        }
-      }
-    }
+    // Sand mounds above surface — SKIPPED here, drawn as overlay after ants
+    // (so mounds appear in front of ants for depth effect)
 
     // Ground — flat gray sand with subtle noise
     for (let py = SURFACE_PX; py < H; py++) {
@@ -99,10 +92,39 @@ AF.renderer.terrain = function(ctx, state) {
 
     _tCtx.putImageData(tImg, 0, 0);
     _terrainImageData = _tCtx.getImageData(0, 0, W, H);
+
+    // Build mound overlay (above-surface terrain only, on transparent background)
+    const mImg = _mCtx.createImageData(W, H);
+    const md = mImg.data;
+    for (let py = Math.max(0, SURFACE_PX - 50); py < SURFACE_PX; py++) {
+      const gy = (py / CELL) | 0;
+      for (let px = 0; px < W; px++) {
+        const gx = (px / CELL) | 0;
+        const v = cellAt(gx, gy);
+        if (v > 0) {
+          const mi = (py * W + px) * 4;
+          const noise = (pixelHash(px, py) - 0.5) * 4;
+          md[mi]     = Math.min(255, SAND_R + noise) | 0;
+          md[mi + 1] = Math.min(255, SAND_G + noise) | 0;
+          md[mi + 2] = Math.min(255, SAND_B + noise) | 0;
+          md[mi + 3] = 255;
+        }
+      }
+    }
+    _mCtx.putImageData(mImg, 0, 0);
+    _moundImageData = _mCtx.getImageData(0, 0, W, H);
+
     state.terrainDirty = false;
   }
 
   ctx.drawImage(_tOff, 0, 0);
+};
+
+// Draw surface mounds as overlay (called AFTER ants for depth effect)
+AF.renderer.surfaceMounds = function(ctx, state) {
+  if (!_moundImageData) return;
+  _mCtx.putImageData(_moundImageData, 0, 0);
+  ctx.drawImage(_mOff, 0, 0);
 };
 
 // ═══════════════════════════════════════════════════════════════════
@@ -133,8 +155,10 @@ AF.renderer.glass = function(ctx) {
 
 AF.renderer.food = function(ctx, foods, foodStores) {
   // Surface food
-  for (const f of foods) {
-    _drawFoodCluster(ctx, f, 'rgba(60,60,60,0.7)');
+  if (foods) {
+    for (const f of foods) {
+      _drawFoodCluster(ctx, f, 'rgba(60,60,60,0.7)');
+    }
   }
   // Underground food stores (slightly lighter to distinguish)
   if (foodStores) {
@@ -146,15 +170,15 @@ AF.renderer.food = function(ctx, foods, foodStores) {
 
 function _drawFoodCluster(ctx, f, color) {
   const amt = f.amount || 3;
-  const baseR = 3 + amt * 0.6;
+  const baseR = 4 + amt * 0.8;
   const seed = (f.x * 137 + f.y * 269) | 0;
-  const crumbCount = Math.min(amt + 2, 8);
+  const crumbCount = Math.min(amt * 2 + 3, 16);
   ctx.fillStyle = color;
   for (let i = 0; i < crumbCount; i++) {
     const h = ((seed + i * 7919) * 2654435761) >>> 0;
     const cx = f.x + ((h & 0xFF) / 255 - 0.5) * baseR * 2;
     const cy = f.y + (((h >> 8) & 0xFF) / 255 - 0.5) * baseR * 1.5;
-    const sz = 1 + ((h >> 16) & 0x1);
+    const sz = 1.5 + ((h >> 16) & 0x1);
     ctx.fillRect(Math.round(cx), Math.round(cy), sz, sz);
   }
 }
