@@ -94,15 +94,18 @@ AF.behavior.updateColonyGoals = function(state) {
     g.targetChambers = g.targetChambers + 1;
   }
 
-  // Set dig priority based on phase
-  switch (g.phase) {
-    case 'shaft':   state.digPriority = 9; break;
-    case 'gallery': state.digPriority = 7; break;
-    case 'chamber': state.digPriority = 5; break;
-    case 'expand':  state.digPriority = 6; break;
+  // Set dig priority based on phase — but ONLY if no active AI directive
+  // The AI directive should take precedence over the colony's own phase logic
+  if (!state.directive || !state.directive.focus) {
+    switch (g.phase) {
+      case 'shaft':   state.digPriority = 9; break;
+      case 'gallery': state.digPriority = 7; break;
+      case 'chamber': state.digPriority = 5; break;
+      case 'expand':  state.digPriority = 6; break;
+    }
   }
 
-  // Override if food critical
+  // Override if food critical (even AI can't ignore starvation)
   if (g.needsFood) state.digPriority = Math.min(state.digPriority, 4);
 
   // Track brood needs
@@ -649,7 +652,50 @@ function _evaluateInitiative(state, ant, s, goals) {
     }
   }
 
-  // High dig priority from AI directive
+  // ── AI DIRECTIVE: strong influence on idle ant decisions ──
+  // When Claude AI sets a focus, ants should respond with high probability
+  if (state.directive && state.directive.focus && ant.stateTimer > 20) {
+    const focus = state.directive.focus;
+    const aiChance = 0.35; // 35% chance per idle ant per evaluation = strong influence
+
+    if (focus === 'extend_shaft' || focus === 'extend_gallery' || focus === 'dig_chamber') {
+      if (Math.random() < aiChance) {
+        _changeState(ant, ST.ENTER);
+        AF.ant.setThought(ant, focus === 'extend_shaft' ? 'AI: deepening shaft' :
+          focus === 'extend_gallery' ? 'AI: branching gallery' : 'AI: carving chamber');
+        return true;
+      }
+    } else if (focus === 'forage') {
+      if (Math.random() < aiChance) {
+        _changeState(ant, ST.FORAGE);
+        AF.ant.setThought(ant, 'AI: foraging for colony');
+        return true;
+      }
+    } else if (focus === 'explore') {
+      if (Math.random() < aiChance) {
+        _changeState(ant, ST.ENTER);
+        ant._goalExplore = true;
+        AF.ant.setThought(ant, 'AI: scouting new territory');
+        return true;
+      }
+    } else if (focus === 'nurse') {
+      if (isYoung && Math.random() < aiChance * 1.5) {
+        _changeState(ant, ST.NURSE);
+        ant.carryingFood = 0;
+        AF.ant.setThought(ant, 'AI: tending brood');
+        return true;
+      }
+    } else if (focus === 'rest') {
+      if (Math.random() < aiChance * 0.5) {
+        _changeState(ant, ST.REST);
+        ant.restDuration = B_REST_DUR_MIN + (Math.random() * B_REST_DUR_MAX) | 0;
+        AF.ant.setThought(ant, 'AI: colony resting');
+        return true;
+      }
+    }
+  }
+
+  // Fallback: high dig priority nudge (for when no AI directive)
   if (state.digPriority > 6 && ant.stateTimer > 30 && Math.random() < 0.03) {
     _changeState(ant, ST.ENTER);
     AF.ant.setThought(ant, 'Answering dig call');

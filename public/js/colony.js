@@ -96,6 +96,11 @@ AF.colony.tick = function(state) {
     AF.behavior.updateColonyGoals(state);
   }
 
+  // Re-apply AI role_shift every 300 frames (~5 seconds) to keep nudging idle ants
+  if (state.frame % 300 === 0 && state.directive && state.directive.role_shift) {
+    AF.colony._applyRoleShift(state, state.directive.role_shift);
+  }
+
   // Pheromone decay every 8 frames
   if (state.frame % 8 === 0) {
     AF.pheromones.decay(state);
@@ -431,24 +436,33 @@ AF.colony.applyDirective = function(state, directive) {
 
   // Role shifts: nudge some ants between states
   if (directive.role_shift) {
-    const rs = directive.role_shift;
-    let toDigger = rs.idle_to_digger || 0;
-    let toForager = rs.idle_to_forager || 0;
-    let toExplorer = rs.idle_to_explorer || 0;
-    let toNurse = rs.idle_to_nurse || 0;
+    AF.colony._applyRoleShift(state, directive.role_shift);
+  }
+};
 
-    for (const ant of state.ants) {
-      if (ant.isQueen) continue;
-      if (ant.state === AF.ST.IDLE || ant.state === AF.ST.REST) {
-        if (toDigger > 0) {
-          ant.state = AF.ST.ENTER; ant.stateTimer = 0; toDigger--;
-        } else if (toForager > 0) {
-          ant.state = AF.ST.FORAGE; ant.stateTimer = 0; toForager--;
-        } else if (toExplorer > 0) {
-          ant.state = AF.ST.EXPLORE; ant.stateTimer = 0; toExplorer--;
-        } else if (toNurse > 0) {
-          ant.state = AF.ST.NURSE; ant.stateTimer = 0; toNurse--;
-        }
+// Reusable role shift — called both on directive arrival and periodically
+AF.colony._applyRoleShift = function(state, rs) {
+  if (!rs) return;
+  let toDigger = rs.idle_to_digger || 0;
+  let toForager = rs.idle_to_forager || 0;
+  let toExplorer = rs.idle_to_explorer || 0;
+  let toNurse = rs.idle_to_nurse || 0;
+
+  for (const ant of state.ants) {
+    if (ant.isQueen) continue;
+    if (ant.state === AF.ST.IDLE || ant.state === AF.ST.REST) {
+      if (toDigger > 0) {
+        ant.state = AF.ST.ENTER; ant.stateTimer = 0; toDigger--;
+        AF.ant.setThought(ant, 'AI assigned: dig');
+      } else if (toForager > 0) {
+        ant.state = AF.ST.FORAGE; ant.stateTimer = 0; toForager--;
+        AF.ant.setThought(ant, 'AI assigned: forage');
+      } else if (toExplorer > 0) {
+        ant.state = AF.ST.EXPLORE; ant.stateTimer = 0; toExplorer--;
+        AF.ant.setThought(ant, 'AI assigned: explore');
+      } else if (toNurse > 0) {
+        ant.state = AF.ST.NURSE; ant.stateTimer = 0; toNurse--;
+        AF.ant.setThought(ant, 'AI assigned: nurse');
       }
     }
   }
@@ -558,6 +572,7 @@ AF.colony.serialize = function(state) {
     entranceX: state.entranceX,
     narration: state.narration, insight: state.insight,
     digPriority: state.digPriority,
+    directive: state.directive || null,
     tuning: state.tuning,
     colonyGoals: state.colonyGoals,
     nextId: AF.ant.getNextId(),
@@ -597,7 +612,7 @@ AF.colony.deserialize = function(data) {
     terrainDirty: true,
     narration: data.narration || '',
     insight: data.insight || '',
-    directive: null,
+    directive: data.directive || null,
     tokenUsage: null,
     digPriority: data.digPriority || 7,
     tuning: tuning,
