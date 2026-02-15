@@ -68,7 +68,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 function buildSnapshot(checkpoint: any) {
   if (!checkpoint || !checkpoint.ants) return null;
 
-  const roles = { digger: 0, forager: 0, explorer: 0, idle: 0 };
+  const roles = { digger: 0, forager: 0, explorer: 0, nurse: 0, idle: 0 };
   let avgEnergy = 0;
   let stuckCount = 0;
   let workerCount = 0;
@@ -85,13 +85,33 @@ function buildSnapshot(checkpoint: any) {
 
   avgEnergy = workerCount > 0 ? Math.round(avgEnergy / workerCount) : 0;
 
+  // Brood counts
+  const brood = checkpoint.brood || [];
+  const broodCounts = { eggs: 0, larvae: 0, pupae: 0 };
+  for (const b of brood) {
+    if (b.stage === 0) broodCounts.eggs++;
+    else if (b.stage === 1) broodCounts.larvae++;
+    else if (b.stage === 2) broodCounts.pupae++;
+  }
+
+  // Chamber types
+  const chamberTypes: Record<string, number> = {};
+  for (const c of (checkpoint.chambers || [])) {
+    const t = c.type || 'general';
+    chamberTypes[t] = (chamberTypes[t] || 0) + 1;
+  }
+
   return {
     day: checkpoint.simDay || 1,
     pop: workerCount,
     dug: checkpoint.totalDug ? ((checkpoint.totalDug / ((227 - 61) * 320)) * 100).toFixed(1) + '%' : '0%',
     roles,
     food: (checkpoint.foods || []).reduce((s: number, f: any) => s + (f.amount || 0), 0),
+    storedFood: (checkpoint.foodStores || []).reduce((s: number, f: any) => s + (f.amount || 0), 0),
+    brood: broodCounts,
     chambers: (checkpoint.chambers || []).length,
+    chamberTypes,
+    queenUnderground: checkpoint.queenUnderground || false,
     avgEnergy,
     stuck: stuckCount,
   };

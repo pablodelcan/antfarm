@@ -28,10 +28,15 @@ AF.ant.create = function(x, y, isQueen) {
     age: 0,
     isQueen: !!isQueen,
 
+    // Maturity: age-based polyethism (young=nurse, older=digger/forager)
+    // maturity increases over time; < 0.3 = young (prefer nursing), > 0.7 = old (prefer foraging)
+    maturity: isQueen ? 1.0 : Math.random() * 0.2,
+
     // Carrying
     carrying: false,        // has food
     carryingSand: 0,        // sand grains held
     maxSandCarry: 5 + Math.floor(Math.random() * 4),
+    carryingFood: 0,        // food units carried (for nurse transport)
 
     // Movement
     heading: Math.random() * Math.PI * 2,
@@ -47,6 +52,11 @@ AF.ant.create = function(x, y, isQueen) {
     timeSinceRest: 0,
     restDuration: 0,
     pauseTimer: 0,
+    feedCount: 0,           // how many brood this ant has fed (nurse metric)
+
+    // Nursing targets
+    _targetBrood: null,     // brood item this nurse is heading toward
+    _targetChamber: null,   // chamber this ant is navigating to
 
     // Role (cosmetic, derived from behavior)
     role: isQueen ? 'queen' : 'idle',
@@ -79,7 +89,7 @@ AF.ant.underground = function(ant) {
 };
 
 AF.ant.speed = function(ant) {
-  if (ant.carrying || ant.carryingSand > 0) return AF.LOADED_SPEED;
+  if (ant.carrying || ant.carryingSand > 0 || ant.carryingFood > 0) return AF.LOADED_SPEED;
   return AF.BASE_SPEED;
 };
 
@@ -102,6 +112,8 @@ AF.ant.updateRole = function(ant) {
       ant.role = 'explorer'; break;
     case AF.ST.REST:
       ant.role = 'resting'; break;
+    case AF.ST.NURSE:
+      ant.role = 'nurse'; break;
     default:
       ant.role = 'idle'; break;
   }

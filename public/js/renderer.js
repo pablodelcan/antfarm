@@ -128,25 +128,128 @@ AF.renderer.glass = function(ctx) {
 };
 
 // ═══════════════════════════════════════════════════════════════════
-//  FOOD
+//  FOOD (surface and underground)
 // ═══════════════════════════════════════════════════════════════════
 
-AF.renderer.food = function(ctx, foods) {
+AF.renderer.food = function(ctx, foods, foodStores) {
+  // Surface food
   for (const f of foods) {
-    const amt = f.amount || 3;
-    const baseR = 3 + amt * 0.6;
-
-    const seed = (f.x * 137 + f.y * 269) | 0;
-    const crumbCount = Math.min(amt + 2, 8);
-    for (let i = 0; i < crumbCount; i++) {
-      const h = ((seed + i * 7919) * 2654435761) >>> 0;
-      const cx = f.x + ((h & 0xFF) / 255 - 0.5) * baseR * 2;
-      const cy = f.y + (((h >> 8) & 0xFF) / 255 - 0.5) * baseR * 1.5;
-      const cr = 1 + ((h >> 16) & 0x3) * 0.5;
-      // Simple dark crumbs
-      ctx.fillStyle = 'rgba(80,70,55,0.7)';
-      ctx.beginPath(); ctx.arc(cx, cy, cr, 0, 6.28); ctx.fill();
+    _drawFoodCluster(ctx, f, 'rgba(80,70,55,0.7)');
+  }
+  // Underground food stores (slightly different color to distinguish)
+  if (foodStores) {
+    for (const f of foodStores) {
+      _drawFoodCluster(ctx, f, 'rgba(120,90,40,0.8)');
     }
+  }
+};
+
+function _drawFoodCluster(ctx, f, color) {
+  const amt = f.amount || 3;
+  const baseR = 3 + amt * 0.6;
+  const seed = (f.x * 137 + f.y * 269) | 0;
+  const crumbCount = Math.min(amt + 2, 8);
+  for (let i = 0; i < crumbCount; i++) {
+    const h = ((seed + i * 7919) * 2654435761) >>> 0;
+    const cx = f.x + ((h & 0xFF) / 255 - 0.5) * baseR * 2;
+    const cy = f.y + (((h >> 8) & 0xFF) / 255 - 0.5) * baseR * 1.5;
+    const cr = 1 + ((h >> 16) & 0x3) * 0.5;
+    ctx.fillStyle = color;
+    ctx.beginPath(); ctx.arc(cx, cy, cr, 0, 6.28); ctx.fill();
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  BROOD — eggs, larvae, pupae rendered in tunnels
+// ═══════════════════════════════════════════════════════════════════
+
+AF.renderer.brood = function(ctx, brood) {
+  if (!brood) return;
+  for (const b of brood) {
+    const x = b.x, y = b.y;
+
+    if (b.stage === AF.BROOD.EGG) {
+      // Eggs: tiny white ovals
+      ctx.fillStyle = 'rgba(240,235,220,0.9)';
+      ctx.beginPath();
+      ctx.ellipse(x, y, 1.5, 2.2, 0, 0, 6.28);
+      ctx.fill();
+    } else if (b.stage === AF.BROOD.LARVA) {
+      // Larvae: slightly larger, cream-colored, C-shaped
+      const fed = b.fed || 0;
+      const size = 2.0 + fed * 0.4;
+      ctx.fillStyle = 'rgba(245,235,200,0.9)';
+      ctx.beginPath();
+      ctx.arc(x, y, size, 0, 6.28);
+      ctx.fill();
+      // Darker center
+      ctx.fillStyle = 'rgba(220,200,160,0.6)';
+      ctx.beginPath();
+      ctx.arc(x + 0.5, y - 0.3, size * 0.4, 0, 6.28);
+      ctx.fill();
+    } else if (b.stage === AF.BROOD.PUPA) {
+      // Pupae: darker, more defined shape, cocoon-like
+      ctx.fillStyle = 'rgba(200,185,150,0.9)';
+      ctx.beginPath();
+      ctx.ellipse(x, y, 2.2, 3.0, 0.2, 0, 6.28);
+      ctx.fill();
+      // Segmentation lines
+      ctx.strokeStyle = 'rgba(170,155,120,0.5)';
+      ctx.lineWidth = 0.5;
+      ctx.beginPath();
+      ctx.moveTo(x - 1.5, y - 0.5);
+      ctx.lineTo(x + 1.5, y - 0.5);
+      ctx.moveTo(x - 1.5, y + 0.8);
+      ctx.lineTo(x + 1.5, y + 0.8);
+      ctx.stroke();
+    }
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════════
+//  CHAMBER LABELS — subtle type indicators
+// ═══════════════════════════════════════════════════════════════════
+
+AF.renderer.chamberLabels = function(ctx, chambers) {
+  if (!chambers) return;
+
+  const ICONS = {
+    royal: '\u2655',    // crown
+    brood: '\u2022',    // dot (nursery)
+    food: '\u2022',     // dot (granary)
+    midden: '\u2022',   // dot (waste)
+  };
+
+  const COLORS = {
+    royal: 'rgba(200,170,50,0.35)',
+    brood: 'rgba(180,150,200,0.30)',
+    food: 'rgba(120,160,80,0.30)',
+    midden: 'rgba(140,120,100,0.25)',
+  };
+
+  ctx.font = '7px sans-serif';
+  ctx.textAlign = 'center';
+
+  for (const c of chambers) {
+    if (!c.type || c.type === AF.CHAMBER_TYPE.GENERAL) continue;
+
+    const color = COLORS[c.type];
+    if (!color) continue;
+
+    // Subtle glow around chamber center
+    const r = Math.sqrt(c.size) * AF.CELL * 0.3;
+    const grad = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, r);
+    grad.addColorStop(0, color);
+    grad.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, r, 0, 6.28);
+    ctx.fill();
+
+    // Small label
+    ctx.fillStyle = color.replace(/[\d.]+\)$/, '0.6)');
+    const label = c.type === 'royal' ? 'Q' : c.type === 'brood' ? 'N' : c.type === 'food' ? 'F' : 'W';
+    ctx.fillText(label, c.x, c.y - r * 0.5 - 2);
   }
 };
 
@@ -206,6 +309,13 @@ AF.renderer.getPosture = function(ant) {
       bodyTilt: -0.05, legSpeed: 1.1, mandibleOpen: 0.02,
       headDip: 0, abdomenPulse: 1.0, antennaSpeed: 2.0,
       animateWhenStill: false, dustChance: 0
+    };
+  }
+  if (s === ST.NURSE) {
+    return {
+      bodyTilt: -0.1, legSpeed: 0.8, mandibleOpen: 0.08,
+      headDip: 0.15, abdomenPulse: 1.0 + Math.sin(Date.now() * 0.004) * 0.04,
+      antennaSpeed: 1.5, animateWhenStill: true, dustChance: 0
     };
   }
   return {
@@ -301,9 +411,9 @@ AF.renderer.ant = function(ctx, ant, hoveredAnt, particles) {
   ctx.stroke();
   ctx.beginPath(); ctx.arc(hdX + s * 0.7, hdY - s * 0.55 + antBob2 * s, s * 0.05, 0, 6.28); ctx.fill();
 
-  // Food
-  if (ant.carrying) {
-    ctx.fillStyle = '#5a8a30';
+  // Food (foraging or nurse carrying)
+  if (ant.carrying || ant.carryingFood > 0) {
+    ctx.fillStyle = ant.carryingFood > 0 ? '#8a7a30' : '#5a8a30';
     ctx.beginPath(); ctx.arc(hdX + s * 0.45, hdY - s * 0.05, s * 0.25, 0, 6.28); ctx.fill();
   }
 
