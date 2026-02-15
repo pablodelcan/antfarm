@@ -1,5 +1,5 @@
 // =====================================================================
-//  ANTFARM v12 — Main: game loop, HUD, events, initialization
+//  ANTFARM v15 — Main: game loop, HUD, events, initialization
 //  Fullscreen canvas, live shared view
 // =====================================================================
 
