@@ -14,12 +14,12 @@ AF.COLS = AF.W / AF.CELL;          // 320
 AF.ROWS = Math.ceil(AF.H / AF.CELL); // 227
 AF.SURFACE = Math.round(AF.ROWS * 0.27); // 61
 AF.SURFACE_PX = AF.SURFACE * AF.CELL;    // 183
-AF.FRAME = 14;
+AF.FRAME = 3;
 
-// Visual
-AF.SAND_R = 212;
-AF.SAND_G = 194;
-AF.SAND_B = 162;
+// Visual — flat gray sand
+AF.SAND_R = 195;
+AF.SAND_G = 192;
+AF.SAND_B = 188;
 
 // Movement speeds (pixels per frame)
 AF.BASE_SPEED = 0.8;

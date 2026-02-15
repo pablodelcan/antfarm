@@ -31,7 +31,7 @@ AF.ant.create = function(x, y, isQueen) {
     // Carrying
     carrying: false,        // has food
     carryingSand: 0,        // sand grains held
-    maxSandCarry: 3 + Math.floor(Math.random() * 3),
+    maxSandCarry: 5 + Math.floor(Math.random() * 4),
 
     // Movement
     heading: Math.random() * Math.PI * 2,

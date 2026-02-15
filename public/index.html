@@ -5,99 +5,130 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Antfarm</title>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=Inter:wght@300;400;500&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=Inter:wght@300;400;500;600;700;800;900&display=swap');
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
-    background: #fff; color: #1a1a1a;
+    background: #e8e5e0; color: #1a1a1a;
     font-family: 'Inter', -apple-system, sans-serif;
     height: 100vh; overflow: hidden; -webkit-font-smoothing: antialiased;
   }
 
   /* ── Intro Screen ── */
   .intro {
-    position: fixed; inset: 0; background: #fff;
+    position: fixed; inset: 0; background: #e8e5e0;
     display: flex; flex-direction: column; align-items: center; justify-content: center;
     z-index: 100; transition: opacity 0.8s ease;
   }
   .intro.hide { opacity: 0; pointer-events: none; }
-  .intro h1 { font-family: 'EB Garamond', serif; font-size: clamp(2.5rem, 5vw, 4.5rem); font-weight: 400; margin-bottom: 12px; }
-  .intro h1 em { font-style: italic; }
+  .intro h1 {
+    font-family: 'EB Garamond', serif; font-size: clamp(2.5rem, 5vw, 4.5rem);
+    font-weight: 400; font-style: italic; margin-bottom: 12px; letter-spacing: -0.01em;
+  }
   .intro .sub { color: #999; font-size: 0.82rem; letter-spacing: 0.08em; margin-bottom: 12px; }
   .intro .sub2 { color: #bbb; font-size: 0.7rem; letter-spacing: 0.06em; margin-bottom: 48px; }
   .intro button {
-    background: none; border: 1px solid #ddd; color: #1a1a1a;
+    background: none; border: 1px solid #ccc; color: #1a1a1a;
     font-family: 'Inter', sans-serif; font-size: 0.78rem; letter-spacing: 0.14em;
     text-transform: uppercase; padding: 14px 44px; cursor: pointer; transition: all 0.3s;
   }
   .intro button:hover { border-color: #1a1a1a; background: #1a1a1a; color: #fff; }
 
   /* ── App Layout ── */
-  .app { display: none; height: 100vh; flex-direction: column; }
+  .app {
+    display: none; height: 100vh; flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 20px;
+  }
+
+  /* ── Main Card ── */
+  .main-card {
+    background: #fff;
+    border-radius: 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.04);
+    display: flex; flex-direction: column;
+    max-width: 1100px; width: 100%;
+    max-height: 100%;
+    overflow: hidden;
+  }
+
+  /* ── Topbar ── */
   .topbar {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 0 24px; height: 48px; flex-shrink: 0; border-bottom: 1px solid #eee;
+    display: flex; align-items: baseline; justify-content: space-between;
+    padding: 18px 28px 14px; flex-shrink: 0;
   }
-  .topbar .title { font-family: 'EB Garamond', serif; font-size: 1.15rem; font-weight: 400; }
-  .topbar .title em { font-style: italic; }
-  .topbar .stats { display: flex; gap: 24px; font-size: 0.72rem; color: #999; letter-spacing: 0.04em; }
-  .topbar .stats .v { color: #1a1a1a; font-weight: 500; margin-left: 6px; font-variant-numeric: tabular-nums; }
+  .topbar .title {
+    font-family: 'EB Garamond', serif; font-size: 1.8rem; font-weight: 400;
+    font-style: italic; letter-spacing: -0.01em; line-height: 1;
+  }
+  .topbar .stats {
+    display: flex; gap: 24px; font-size: 0.82rem; color: #1a1a1a;
+    align-items: baseline;
+  }
+  .topbar .stats .stat-group {
+    display: flex; align-items: baseline; gap: 6px;
+  }
+  .topbar .stats .stat-label {
+    font-weight: 400; font-size: 0.82rem; color: #1a1a1a;
+  }
+  .topbar .stats .stat-val {
+    font-weight: 700; font-size: 0.82rem; font-variant-numeric: tabular-nums;
+  }
 
-  /* ── Intelligence Bar ── */
+  /* ── Intel Bar ── */
   .intel-bar {
-    display: flex; align-items: center; gap: 0;
-    height: 36px; flex-shrink: 0;
-    border-bottom: 1px solid #eee; background: #fafaf8;
-    padding: 0 24px; overflow: hidden;
-    opacity: 0; transition: opacity 0.6s ease;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 28px 12px; flex-shrink: 0;
+    font-size: 0.68rem; color: #888; gap: 12px;
+    border-bottom: 1px solid #f0f0f0;
   }
-  .intel-bar.show { opacity: 1; }
-  .intel-brain {
+  .intel-bar .intel-left {
+    display: flex; align-items: center; gap: 12px;
+  }
+  .intel-bar .intel-dot {
+    width: 5px; height: 5px; border-radius: 50%; background: #1a1a1a; flex-shrink: 0;
+  }
+  .intel-bar .intel-label {
+    font-weight: 600; color: #1a1a1a; font-size: 0.68rem;
+  }
+  .intel-bar .intel-focus {
+    font-family: 'EB Garamond', serif; font-style: italic; font-size: 0.82rem;
+    color: #1a1a1a; font-weight: 500;
+  }
+  .intel-bar .intel-sep {
+    color: #ccc; font-size: 0.72rem;
+  }
+  .intel-bar .intel-roles {
+    color: #999; font-size: 0.65rem; letter-spacing: 0.02em;
+  }
+  .intel-bar .intel-right {
     display: flex; align-items: center; gap: 8px;
-    font-size: 0.62rem; color: #bbb; letter-spacing: 0.08em;
-    text-transform: uppercase; white-space: nowrap; flex-shrink: 0;
-  }
-  .intel-brain .brain-icon {
-    width: 16px; height: 16px; position: relative; display: flex; align-items: center; justify-content: center;
-  }
-  .intel-brain .brain-dot {
-    width: 6px; height: 6px; border-radius: 50%; background: #c084fc;
-    animation: brain-pulse 2.5s ease-in-out infinite;
-  }
-  .intel-brain .brain-ring {
-    position: absolute; inset: 0; border: 1.5px solid rgba(192,132,252,0.3);
-    border-radius: 50%; animation: brain-ring 2.5s ease-in-out infinite;
-  }
-  @keyframes brain-pulse { 0%, 100% { opacity: 0.6; transform: scale(0.85); } 50% { opacity: 1; transform: scale(1.15); } }
-  @keyframes brain-ring { 0%, 100% { opacity: 0.2; transform: scale(0.8); } 50% { opacity: 0.5; transform: scale(1.2); } }
-  .intel-divider { width: 1px; height: 16px; background: #e8e4de; margin: 0 14px; flex-shrink: 0; }
-  .intel-focus {
-    font-family: 'EB Garamond', serif; font-size: 0.85rem;
-    color: #1a1a1a; font-style: italic; white-space: nowrap; flex-shrink: 0;
-  }
-  .intel-roles {
-    font-size: 0.6rem; color: #aaa; letter-spacing: 0.03em;
-    font-variant-numeric: tabular-nums; white-space: nowrap; flex-shrink: 0; margin-left: 14px;
-  }
-  .intel-tokens {
-    font-size: 0.55rem; color: #c084fc; letter-spacing: 0.03em;
-    font-variant-numeric: tabular-nums; white-space: nowrap; flex-shrink: 0;
-    margin-left: 14px; opacity: 0.8;
-  }
-  .intel-tokens .tok-num { font-weight: 500; }
-  .intel-insight {
-    font-family: 'EB Garamond', serif; font-size: 0.78rem;
-    color: #888; font-style: italic; margin-left: auto;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    max-width: 420px; padding-left: 14px;
+    font-family: 'EB Garamond', serif; font-style: italic; font-size: 0.78rem;
+    color: #bbb;
   }
 
-  /* ── Canvas ── */
+  /* ── Canvas Area ── */
   .canvas-wrap {
     flex: 1; position: relative; overflow: hidden;
-    background: #e8e0d4; cursor: crosshair;
     display: flex; align-items: center; justify-content: center;
+    min-height: 0;
   }
-  .canvas-wrap canvas { display: block; }
+  .canvas-wrap canvas {
+    display: block; cursor: crosshair; width: 100%; height: 100%;
+    border: 1px solid #e0e0e0; border-radius: 2px;
+  }
+
+  /* ── Bottom Bar ── */
+  .bottombar {
+    display: flex; align-items: center; justify-content: center;
+    padding: 10px 28px; flex-shrink: 0;
+  }
+  .bottombar .status {
+    font-size: 0.72rem; color: #1a1a1a; font-weight: 600;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .bottombar .status .dot {
+    width: 6px; height: 6px; border-radius: 50%; background: #1a1a1a;
+  }
 
   /* ── Tooltip ── */
   .ant-tooltip {
@@ -106,31 +137,19 @@
     border: 1px solid #e0e0e0; padding: 8px 12px;
     font-size: 0.68rem; line-height: 1.5; color: #555;
     z-index: 50; opacity: 0; transition: opacity 0.15s ease; max-width: 220px; white-space: nowrap;
+    border-radius: 8px;
   }
   .ant-tooltip.show { opacity: 1; }
   .ant-tooltip .tt-name { color: #1a1a1a; font-weight: 500; margin-bottom: 2px; font-size: 0.72rem; }
   .ant-tooltip .tt-row { display: flex; justify-content: space-between; gap: 12px; }
   .ant-tooltip .tt-val { color: #1a1a1a; font-weight: 500; }
 
-  /* ── Bottom Bar ── */
-  .bottombar {
-    display: flex; align-items: center; justify-content: center; gap: 1px;
-    height: 32px; flex-shrink: 0; border-top: 1px solid #eee; background: #fff;
-  }
-  .bottombar .status {
-    font-size: 0.62rem; color: #bbb; letter-spacing: 0.04em;
-    padding: 0 20px; display: flex; align-items: center; gap: 6px;
-  }
-  .bottombar .status .dot {
-    width: 5px; height: 5px; border-radius: 50%; background: #4ade80;
-    animation: pulse 2s infinite;
-  }
-  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
   /* ── Toast ── */
   .toast {
     position: fixed; bottom: 48px; left: 50%; transform: translateX(-50%) translateY(8px);
     background: #1a1a1a; color: #fff; padding: 8px 20px; font-size: 0.72rem;
     opacity: 0; transition: all 0.25s ease; z-index: 90; pointer-events: none;
+    border-radius: 6px;
   }
   .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
@@ -150,59 +169,68 @@
     letter-spacing: 0.04em; text-transform: uppercase;
   }
   .admin-panel button:hover { background: #555; color: #fff; }
-  .admin-panel .speed-ctrl {
-    display: flex; align-items: center; gap: 8px; color: #aaa; font-size: 0.62rem;
-  }
-  .admin-panel input[type="range"] { width: 80px; accent-color: #4ade80; }
+
+  /* ── Hidden data elements ── */
+  .hidden-data { display: none; }
 </style>
 </head>
 <body>
 
 <!-- Intro Screen -->
 <div class="intro">
-  <h1><em>Antfarm</em></h1>
+  <h1>Antfarm</h1>
   <div class="sub">A living colony powered by Claude AI</div>
-  <div class="sub2">v10</div>
+  <div class="sub2">v11</div>
   <button onclick="begin()">Enter</button>
 </div>
 
 <!-- Main App -->
 <div class="app" id="app">
-  <div class="topbar">
-    <div class="title"><em>Antfarm</em></div>
-    <div class="stats">
-      <span>Population<span class="v" id="sAnts">0</span></span>
-      <span>Tunneled<span class="v" id="sTunnel">0%</span></span>
-      <span>Chambers<span class="v" id="sChambers">0</span></span>
-      <span>Day<span class="v" id="sDay">1</span></span>
-    </div>
-  </div>
-
-  <div class="intel-bar show" id="intelBar">
-    <div class="intel-brain">
-      <div class="brain-icon">
-        <div class="brain-dot"></div>
-        <div class="brain-ring"></div>
+  <div class="main-card">
+    <div class="topbar">
+      <div class="title">Antfarm</div>
+      <div class="stats">
+        <div class="stat-group"><span class="stat-label">Population</span><span class="stat-val" id="sAnts">0</span></div>
+        <div class="stat-group"><span class="stat-label">Tunneled</span><span class="stat-val" id="sTunnel">0%</span></div>
+        <div class="stat-group"><span class="stat-label">Chambers</span><span class="stat-val" id="sChambers">0</span></div>
+        <div class="stat-group"><span class="stat-label">Day</span><span class="stat-val" id="sDay">1</span></div>
       </div>
-      <span>Claude AI</span>
     </div>
-    <div class="intel-divider"></div>
-    <div class="intel-focus" id="intelFocus">Observing colony...</div>
-    <div class="intel-roles" id="intelRoles"></div>
-    <div class="intel-tokens" id="intelTokens"></div>
-    <div class="intel-insight" id="intelInsight"></div>
-  </div>
 
-  <div class="canvas-wrap" id="wrap">
-    <canvas id="c"></canvas>
-  </div>
+    <div class="intel-bar" id="intelBar">
+      <div class="intel-left">
+        <span class="intel-dot"></span>
+        <span class="intel-label">Claude AI</span>
+        <span class="intel-sep">|</span>
+        <span class="intel-focus" id="intelFocusDisplay">Observing colony</span>
+        <span class="intel-roles" id="intelRolesDisplay"></span>
+        <span class="intel-roles" id="intelTokensDisplay"></span>
+      </div>
+      <div class="intel-right">
+        <span id="intelInsightDisplay"></span>
+      </div>
+    </div>
 
-  <div class="bottombar">
-    <div class="status">
-      <span class="dot"></span>
-      <span id="statusText">Connecting...</span>
+    <div class="canvas-wrap" id="wrap">
+      <canvas id="c"></canvas>
+    </div>
+
+    <div class="bottombar">
+      <div class="status">
+        <span class="dot"></span>
+        <span id="statusText">Day 1</span>
+      </div>
     </div>
   </div>
+</div>
+
+<!-- Hidden data trackers -->
+<div class="hidden-data">
+  <span id="intelFocus"></span>
+  <span id="intelRoles"></span>
+  <span id="intelTokens"></span>
+  <span id="intelInsight"></span>
+  <span id="aiNarration"></span>
 </div>
 
 <!-- Tooltip -->
@@ -216,9 +244,6 @@
 
 <div class="toast" id="toast"></div>
 
-<!-- AI Narration (hidden, updated via JS) -->
-<div id="aiNarration" style="display:none;"></div>
-
 <!-- Hidden Admin Panel -->
 <div class="admin-panel" id="adminPanel">
   <button onclick="adminAction('addAnts')">+5 Ants</button>
@@ -226,16 +251,16 @@
   <button onclick="if(confirm('Reset?')) restartColony()" style="background:#8b0000;color:#fff">Reset</button>
 </div>
 
-<!-- Scripts: loaded in dependency order -->
-<script src="/js/constants.js"></script>
-<script src="/js/terrain.js"></script>
-<script src="/js/pheromones.js"></script>
-<script src="/js/ant.js"></script>
-<script src="/js/behavior.js"></script>
-<script src="/js/colony.js"></script>
-<script src="/js/renderer.js"></script>
-<script src="/js/network.js"></script>
-<script src="/js/main.js"></script>
+<!-- Scripts -->
+<script src="/js/constants.js?v=14"></script>
+<script src="/js/terrain.js?v=14"></script>
+<script src="/js/pheromones.js?v=14"></script>
+<script src="/js/ant.js?v=14"></script>
+<script src="/js/behavior.js?v=14"></script>
+<script src="/js/colony.js?v=14"></script>
+<script src="/js/renderer.js?v=14"></script>
+<script src="/js/network.js?v=14"></script>
+<script src="/js/main.js?v=14"></script>
 
 </body>
 </html>

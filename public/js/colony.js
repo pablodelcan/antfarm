@@ -31,7 +31,10 @@ AF.colony.create = function() {
     insight: '',
     directive: null,
     tokenUsage: null,
-    digPriority: 7,  // 1-10, affects how eagerly ants dig
+    digPriority: 7,
+
+    // Colony intelligence
+    colonyGoals: null, // initialized by behavior.updateColonyGoals
   };
 
   // Generate terrain
@@ -65,6 +68,11 @@ AF.colony.create = function() {
 
 AF.colony.tick = function(state) {
   state.frame++;
+
+  // Colony intelligence: update goals every 120 frames (~2 seconds)
+  if (state.frame % 120 === 0) {
+    AF.behavior.updateColonyGoals(state);
+  }
 
   // Pheromone decay every 8 frames
   if (state.frame % 8 === 0) {
@@ -292,6 +300,7 @@ AF.colony.serialize = function(state) {
     hasQueen: state.hasQueen, entranceX: state.entranceX,
     narration: state.narration, insight: state.insight,
     digPriority: state.digPriority,
+    colonyGoals: state.colonyGoals,
     nextId: AF.ant.getNextId(),
   };
 };
@@ -316,6 +325,7 @@ AF.colony.deserialize = function(data) {
     directive: null,
     tokenUsage: null,
     digPriority: data.digPriority || 7,
+    colonyGoals: data.colonyGoals || null,
   };
 
   // Restore ant ID counter

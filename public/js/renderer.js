@@ -1,6 +1,6 @@
 // =====================================================================
-//  ANTFARM v10 — Renderer: terrain, ants, particles, chrome
-//  Ported from v9 viewer — adapted for 8-state machine
+//  ANTFARM v11 — Renderer: clean minimal style
+//  White tunnels, flat gray sand, black silhouette trees, no frame
 // =====================================================================
 
 'use strict';
@@ -19,7 +19,7 @@ AF.renderer.init = function(canvas) {
 };
 
 // ═══════════════════════════════════════════════════════════════════
-//  TERRAIN — pixel-level rendering with noise, depth, strata, edges
+//  TERRAIN — flat gray sand with white tunnels
 // ═══════════════════════════════════════════════════════════════════
 
 AF.renderer.terrain = function(ctx, state) {
@@ -39,15 +39,15 @@ AF.renderer.terrain = function(ctx, state) {
     const depthRange = H - SURFACE_PX;
     const pixelHash = AF.terrain.pixelHash;
 
-    // Sky (may be overwritten by mound sand below)
+    // Sky — clean white
     for (let y = 0; y < SURFACE_PX; y++) {
       for (let x = 0; x < W; x++) {
         const i = (y * W + x) * 4;
-        d[i] = 238; d[i + 1] = 235; d[i + 2] = 228; d[i + 3] = 255;
+        d[i] = 255; d[i + 1] = 255; d[i + 2] = 255; d[i + 3] = 255;
       }
     }
 
-    // Sand mounds above surface — deposited sand sits on top of ground
+    // Sand mounds above surface
     for (let py = Math.max(0, SURFACE_PX - 50); py < SURFACE_PX; py++) {
       const gy = (py / CELL) | 0;
       for (let px = 0; px < W; px++) {
@@ -56,30 +56,19 @@ AF.renderer.terrain = function(ctx, state) {
         if (v > 0) {
           const i = (py * W + px) * 4;
           const pixHash = pixelHash(px, py);
-          // Lighter mound sand color (sun-exposed, sandy brown)
-          let r = SAND_R + 8 + (pixHash - 0.5) * 14;
-          let g = SAND_G + 5 + (pixHash - 0.5) * 10;
-          let b = SAND_B + 3 + (pixHash - 0.5) * 8;
-          // Slight edge shadow on mound edges
-          const hasAirLeft  = !cellAt(gx - 1, gy);
-          const hasAirRight = !cellAt(gx + 1, gy);
-          const hasAirAbove = !cellAt(gx, gy - 1);
-          if (hasAirLeft || hasAirRight || hasAirAbove) {
-            r *= 0.92; g *= 0.92; b *= 0.92;
-          }
-          d[i]     = Math.max(0, Math.min(255, r)) | 0;
-          d[i + 1] = Math.max(0, Math.min(255, g)) | 0;
-          d[i + 2] = Math.max(0, Math.min(255, b)) | 0;
+          const noise = (pixHash - 0.5) * 6;
+          d[i]     = Math.min(255, SAND_R + 4 + noise) | 0;
+          d[i + 1] = Math.min(255, SAND_G + 4 + noise) | 0;
+          d[i + 2] = Math.min(255, SAND_B + 4 + noise) | 0;
           d[i + 3] = 255;
         }
       }
     }
 
-    // Ground
+    // Ground — flat gray sand with subtle noise
     for (let py = SURFACE_PX; py < H; py++) {
       const gy = (py / CELL) | 0;
       const depthFactor = (py - SURFACE_PX) / depthRange;
-      const strataShift = Math.sin(py * 0.08) * 4 + Math.sin(py * 0.03) * 6;
 
       for (let px = 0; px < W; px++) {
         const gx = (px / CELL) | 0;
@@ -87,51 +76,53 @@ AF.renderer.terrain = function(ctx, state) {
         const v = cellAt(gx, gy);
 
         if (v > 0) {
-          // Bilinear edge detection
-          const nearTunnel = (!cellAt(gx + 1, gy) || !cellAt(gx, gy + 1) || !cellAt(gx + 1, gy + 1) ||
-            !cellAt(gx - 1, gy) || !cellAt(gx, gy - 1) ||
-            !cellAt(gx - 1, gy - 1) || !cellAt(gx + 1, gy - 1) || !cellAt(gx - 1, gy + 1));
-
-          // Base sand color with depth darkening
-          const darkening = 1 - depthFactor * 0.3;
-          let r = (SAND_R + strataShift) * darkening;
-          let g = (SAND_G + strataShift * 0.6) * darkening;
-          let b = (SAND_B + strataShift * 0.3) * darkening;
-
-          // Pixel noise for texture
-          const noise = (pixelHash(px, py) - 0.5) * 16;
-          r += noise; g += noise * 0.8; b += noise * 0.6;
-
-          // Edge shadow
-          if (nearTunnel) {
-            let shadow = 0, samples = 0;
-            for (let dy = -1; dy <= 1; dy++) {
-              for (let dx = -1; dx <= 1; dx++) {
-                if (dx === 0 && dy === 0) continue;
-                samples++;
-                if (!cellAt(gx + dx, gy + dy)) {
-                  shadow += (dx === 0 || dy === 0) ? 1.0 : 0.7;
-                }
-              }
-            }
-            const edgeDarken = (shadow / (samples * 0.8)) * 0.35;
-            r *= (1 - edgeDarken); g *= (1 - edgeDarken); b *= (1 - edgeDarken);
-          }
-
-          // Hardness tint
-          if (v >= 3) { r += (v - 2) * 3; g -= (v - 2) * 1; }
+          // Solid sand — flat gray with very subtle depth darkening
+          const darkening = 1 - depthFactor * 0.08;
+          const noise = (pixelHash(px, py) - 0.5) * 4;
+          const r = (SAND_R + noise) * darkening;
+          const g = (SAND_G + noise) * darkening;
+          const b = (SAND_B + noise) * darkening;
 
           d[i]     = Math.max(0, Math.min(255, r)) | 0;
           d[i + 1] = Math.max(0, Math.min(255, g)) | 0;
           d[i + 2] = Math.max(0, Math.min(255, b)) | 0;
           d[i + 3] = 255;
         } else {
-          // Tunnel — dark underground
-          const td = depthFactor * 0.15;
-          d[i] = (10 + td * 8) | 0;
-          d[i + 1] = (8 + td * 6) | 0;
-          d[i + 2] = (6 + td * 4) | 0;
+          // Tunnel — WHITE (bright, clean)
+          d[i]     = 255;
+          d[i + 1] = 255;
+          d[i + 2] = 255;
           d[i + 3] = 255;
+        }
+      }
+    }
+
+    // Subtle tunnel edge softening — only 1px border blend at edges
+    for (let py = SURFACE_PX; py < H; py++) {
+      for (let px = 0; px < W; px++) {
+        const gx = (px / CELL) | 0;
+        const gy = (py / CELL) | 0;
+        const v = cellAt(gx, gy);
+        if (v > 0) {
+          const subX = px % CELL;
+          const subY = py % CELL;
+          // Only blend the outermost pixel of each cell edge
+          let blend = 0;
+          if (subX === 0 && gx > 0 && !cellAt(gx - 1, gy)) blend = 0.25;
+          else if (subX === CELL - 1 && gx < COLS - 1 && !cellAt(gx + 1, gy)) blend = 0.25;
+          if (subY === 0 && gy > 0 && !cellAt(gx, gy - 1)) blend = Math.max(blend, 0.25);
+          else if (subY === CELL - 1 && gy < ROWS - 1 && !cellAt(gx, gy + 1)) blend = Math.max(blend, 0.25);
+          // Corner blend
+          if (subX === 0 && subY === 0 && gx > 0 && gy > 0 && !cellAt(gx - 1, gy - 1)) blend = Math.max(blend, 0.15);
+          if (subX === CELL - 1 && subY === 0 && gx < COLS - 1 && gy > 0 && !cellAt(gx + 1, gy - 1)) blend = Math.max(blend, 0.15);
+          if (subX === 0 && subY === CELL - 1 && gx > 0 && gy < ROWS - 1 && !cellAt(gx - 1, gy + 1)) blend = Math.max(blend, 0.15);
+          if (subX === CELL - 1 && subY === CELL - 1 && gx < COLS - 1 && gy < ROWS - 1 && !cellAt(gx + 1, gy + 1)) blend = Math.max(blend, 0.15);
+          if (blend > 0) {
+            const i = (py * W + px) * 4;
+            d[i]     = Math.min(255, d[i] + (255 - d[i]) * blend) | 0;
+            d[i + 1] = Math.min(255, d[i + 1] + (255 - d[i + 1]) * blend) | 0;
+            d[i + 2] = Math.min(255, d[i + 2] + (255 - d[i + 2]) * blend) | 0;
+          }
         }
       }
     }
@@ -141,101 +132,131 @@ AF.renderer.terrain = function(ctx, state) {
     state.terrainDirty = false;
   }
 
-  ctx.filter = 'blur(0.5px)';
   ctx.drawImage(_tOff, 0, 0);
-  ctx.filter = 'none';
-  ctx.globalAlpha = 0.4;
-  ctx.drawImage(_tOff, 0, 0);
-  ctx.globalAlpha = 1.0;
 };
 
 // ═══════════════════════════════════════════════════════════════════
-//  FRAME — green border with bolts
+//  FRAME — none (clean card handles the border)
 // ═══════════════════════════════════════════════════════════════════
 
 AF.renderer.frame = function(ctx) {
-  const { W, H, FRAME } = AF;
-  const green = '#2d8c3c', greenDark = '#1e6b2b', greenLight = '#3aad4d';
-
-  ctx.fillStyle = green;
-  ctx.fillRect(0, 0, W, FRAME);
-  ctx.fillRect(0, H - FRAME * 2.5, W, FRAME * 2.5);
-  ctx.fillRect(0, 0, FRAME, H);
-  ctx.fillRect(W - FRAME, 0, FRAME, H);
-
-  const boltR = 5;
-  const bolts = [
-    [FRAME / 2, FRAME / 2], [W - FRAME / 2, FRAME / 2],
-    [FRAME / 2, H - FRAME * 1.5], [W - FRAME / 2, H - FRAME * 1.5],
-    [FRAME / 2, H * 0.35], [W - FRAME / 2, H * 0.35],
-    [FRAME / 2, H * 0.65], [W - FRAME / 2, H * 0.65]
-  ];
-  for (const [bx, by] of bolts) {
-    ctx.beginPath(); ctx.arc(bx, by, boltR, 0, 6.28); ctx.fillStyle = greenDark; ctx.fill();
-    ctx.beginPath(); ctx.arc(bx - 1, by - 1, boltR * 0.6, 0, 6.28); ctx.fillStyle = greenLight; ctx.fill();
-  }
-
-  for (let i = 0; i < 7; i++) {
-    ctx.beginPath(); ctx.arc(W * 0.35 + i * 12, FRAME * 0.5, 2, 0, 6.28);
-    ctx.fillStyle = greenDark; ctx.fill();
-  }
-
-  ctx.strokeStyle = greenLight; ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(FRAME, 1); ctx.lineTo(W - FRAME, 1); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(1, FRAME); ctx.lineTo(1, H - FRAME * 2.5); ctx.stroke();
-  ctx.strokeStyle = greenDark;
-  ctx.beginPath(); ctx.moveTo(FRAME, FRAME - 1); ctx.lineTo(W - FRAME, FRAME - 1); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(W - 2, FRAME); ctx.lineTo(W - 2, H - FRAME * 2.5); ctx.stroke();
+  // No frame — the CSS card handles the container
 };
 
 // ═══════════════════════════════════════════════════════════════════
-//  SILHOUETTE — trees, grass, ground line
+//  SILHOUETTE — black trees and grass, varied shapes
 // ═══════════════════════════════════════════════════════════════════
 
 AF.renderer.silhouette = function(ctx) {
-  const { SURFACE_PX, FRAME, W } = AF;
-  const y = SURFACE_PX, left = FRAME, right = W - FRAME;
+  const { SURFACE_PX, W } = AF;
+  const y = SURFACE_PX;
 
-  ctx.save(); ctx.fillStyle = '#2a8a38';
+  ctx.save();
 
-  ctx.fillRect(left, y - 1, right - left, 3);
-  ctx.beginPath(); ctx.moveTo(left, y);
-  for (let x = left; x <= right; x++) {
-    const hill = Math.sin((x - left) * 0.006) * 5 + Math.sin((x - left) * 0.018) * 2;
-    ctx.lineTo(x, y - hill - 2);
+  // Ground line — thin black
+  ctx.strokeStyle = '#1a1a1a';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(0, y);
+  ctx.lineTo(W, y);
+  ctx.stroke();
+
+  // Small grass tufts along ground
+  ctx.strokeStyle = '#1a1a1a';
+  ctx.lineWidth = 1;
+  for (let gx = 10; gx < W - 10; gx += 18 + Math.sin(gx * 0.13) * 8) {
+    const h1 = 3 + Math.sin(gx * 0.07) * 2;
+    const h2 = 4 + Math.sin(gx * 0.11 + 1) * 2;
+    const h3 = 2.5 + Math.sin(gx * 0.09 + 2) * 1.5;
+    ctx.beginPath(); ctx.moveTo(gx, y); ctx.lineTo(gx - 1, y - h1); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(gx + 3, y); ctx.lineTo(gx + 3, y - h2); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(gx + 6, y); ctx.lineTo(gx + 7, y - h3); ctx.stroke();
   }
-  ctx.lineTo(right, y); ctx.closePath(); ctx.fill();
 
-  for (const tx of [left + 60, left + 280, right - 230, right - 80]) {
-    ctx.fillRect(tx, y - 16, 2.5, 14);
-    ctx.beginPath(); ctx.arc(tx + 1.2, y - 19, 7, 0, 6.28); ctx.fill();
-  }
+  // Trees — black silhouettes with varied shapes
+  const col = '#1a1a1a';
+  const trees = [
+    // Far left cluster (3 trees close together)
+    { x: 38,  type: 'lollipop-outline', h: 26, r: 8 },
+    { x: 55,  type: 'round', h: 22, r: 10 },
+    { x: 68,  type: 'triangle', h: 28, w: 16 },
+    // Left-center cluster (4 trees)
+    { x: 155, type: 'round', h: 32, r: 14 },
+    { x: 175, type: 'lollipop', h: 24, r: 7 },
+    { x: 190, type: 'triangle', h: 22, w: 12 },
+    { x: 210, type: 'lollipop-outline', h: 20, r: 7 },
+    // Center sparse (single tree)
+    { x: W * 0.5, type: 'lollipop-outline', h: 18, r: 6 },
+    // Right cluster (4 trees)
+    { x: W - 240, type: 'round', h: 28, r: 12 },
+    { x: W - 220, type: 'triangle', h: 24, w: 14 },
+    { x: W - 200, type: 'lollipop-outline', h: 22, r: 8 },
+    { x: W - 185, type: 'lollipop', h: 18, r: 6 },
+    // Far right cluster (4 trees)
+    { x: W - 120, type: 'triangle', h: 30, w: 16 },
+    { x: W - 100, type: 'round', h: 24, r: 11 },
+    { x: W - 80,  type: 'lollipop', h: 20, r: 7 },
+    { x: W - 58,  type: 'lollipop-outline', h: 22, r: 8 },
+  ];
 
-  ctx.fillStyle = '#1e6b2b';
-  for (let gx = left + 20; gx < right - 20; gx += 35 + Math.sin(gx * 0.1) * 15) {
-    ctx.fillRect(gx, y - 4, 1.5, 4);
-    ctx.fillRect(gx + 3, y - 5, 1.5, 5);
-    ctx.fillRect(gx + 6, y - 3, 1.5, 3);
+  for (const t of trees) {
+    const baseY = y;
+
+    // Trunk
+    ctx.fillStyle = col;
+    ctx.fillRect(t.x - 1.2, baseY - t.h, 2.4, t.h + 1);
+
+    const crownY = baseY - t.h;
+    const r = t.r || 8;
+
+    if (t.type === 'round') {
+      // Filled black circle crown
+      ctx.fillStyle = col;
+      ctx.beginPath(); ctx.arc(t.x, crownY, r, 0, 6.28); ctx.fill();
+      // Add sub-circles for organic feel
+      ctx.beginPath(); ctx.arc(t.x - r * 0.4, crownY + r * 0.2, r * 0.6, 0, 6.28); ctx.fill();
+      ctx.beginPath(); ctx.arc(t.x + r * 0.45, crownY + r * 0.15, r * 0.55, 0, 6.28); ctx.fill();
+    } else if (t.type === 'triangle') {
+      // Filled black triangle
+      const w = t.w || 12;
+      ctx.fillStyle = col;
+      ctx.beginPath();
+      ctx.moveTo(t.x, crownY - r);
+      ctx.lineTo(t.x - w / 2, crownY + r * 0.6);
+      ctx.lineTo(t.x + w / 2, crownY + r * 0.6);
+      ctx.closePath();
+      ctx.fill();
+    } else if (t.type === 'lollipop') {
+      // Filled black circle (simple lollipop)
+      ctx.fillStyle = col;
+      ctx.beginPath(); ctx.arc(t.x, crownY, r, 0, 6.28); ctx.fill();
+    } else if (t.type === 'lollipop-outline') {
+      // White circle with black outline (distinctive look from reference)
+      ctx.fillStyle = '#fff';
+      ctx.beginPath(); ctx.arc(t.x, crownY, r, 0, 6.28); ctx.fill();
+      ctx.strokeStyle = col;
+      ctx.lineWidth = 1.8;
+      ctx.beginPath(); ctx.arc(t.x, crownY, r, 0, 6.28); ctx.stroke();
+    }
   }
 
   ctx.restore();
 };
 
 // ═══════════════════════════════════════════════════════════════════
-//  GLASS — reflection overlay
+//  GLASS — very subtle, almost none
 // ═══════════════════════════════════════════════════════════════════
 
 AF.renderer.glass = function(ctx) {
-  const { W, H, FRAME } = AF;
-  const g = ctx.createLinearGradient(0, 0, W * 0.6, H * 0.4);
-  g.addColorStop(0, 'rgba(255,255,255,0.04)');
-  g.addColorStop(0.4, 'rgba(255,255,255,0)');
-  g.addColorStop(0.8, 'rgba(255,255,255,0.02)');
-  g.addColorStop(1, 'rgba(255,255,255,0)');
-  ctx.fillStyle = g;
-  ctx.fillRect(FRAME, FRAME, W - FRAME * 2, H - FRAME * 3.5);
-  ctx.save(); ctx.globalAlpha = 0.025; ctx.translate(W * 0.25, 0); ctx.rotate(0.25);
-  ctx.fillStyle = '#fff'; ctx.fillRect(-15, 0, 30, H * 1.5); ctx.restore();
+  // Minimal — just a tiny hint of reflection
+  const { W, H } = AF;
+  ctx.save();
+  ctx.globalAlpha = 0.012;
+  ctx.translate(W * 0.2, 0);
+  ctx.rotate(0.2);
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(-10, 0, 20, H * 1.5);
+  ctx.restore();
 };
 
 // ═══════════════════════════════════════════════════════════════════
@@ -243,13 +264,9 @@ AF.renderer.glass = function(ctx) {
 // ═══════════════════════════════════════════════════════════════════
 
 AF.renderer.food = function(ctx, foods) {
-  const { SAND_R, SAND_G, SAND_B } = AF;
   for (const f of foods) {
     const amt = f.amount || 3;
     const baseR = 3 + amt * 0.6;
-
-    ctx.beginPath(); ctx.arc(f.x, f.y, baseR * 2.5, 0, 6.28);
-    ctx.fillStyle = 'rgba(180,140,60,0.04)'; ctx.fill();
 
     const seed = (f.x * 137 + f.y * 269) | 0;
     const crumbCount = Math.min(amt + 2, 8);
@@ -258,22 +275,9 @@ AF.renderer.food = function(ctx, foods) {
       const cx = f.x + ((h & 0xFF) / 255 - 0.5) * baseR * 2;
       const cy = f.y + (((h >> 8) & 0xFF) / 255 - 0.5) * baseR * 1.5;
       const cr = 1 + ((h >> 16) & 0x3) * 0.5;
-      const kind = (h >> 20) & 0x3;
-      if (kind === 0) {
-        ctx.fillStyle = 'rgba(245,240,230,0.9)';
-        ctx.fillRect(cx - cr, cy - cr, cr * 2, cr * 1.8);
-        ctx.fillStyle = 'rgba(255,255,255,0.4)';
-        ctx.fillRect(cx - cr + 0.5, cy - cr + 0.5, cr, cr * 0.6);
-      } else if (kind === 1) {
-        ctx.fillStyle = 'rgba(180,140,80,0.85)';
-        ctx.beginPath(); ctx.arc(cx, cy, cr, 0, 6.28); ctx.fill();
-      } else if (kind === 2) {
-        ctx.fillStyle = 'rgba(200,80,40,0.85)';
-        ctx.beginPath(); ctx.arc(cx, cy, cr * 1.1, 0, 6.28); ctx.fill();
-      } else {
-        ctx.fillStyle = 'rgba(90,60,30,0.8)';
-        ctx.beginPath(); ctx.ellipse(cx, cy, cr * 1.2, cr * 0.6, (h & 0xF) * 0.4, 0, 6.28); ctx.fill();
-      }
+      // Simple dark crumbs
+      ctx.fillStyle = 'rgba(80,70,55,0.7)';
+      ctx.beginPath(); ctx.arc(cx, cy, cr, 0, 6.28); ctx.fill();
     }
   }
 };
@@ -336,7 +340,6 @@ AF.renderer.getPosture = function(ant) {
       animateWhenStill: false, dustChance: 0
     };
   }
-  // Default (IDLE, ENTER, FORAGE)
   return {
     bodyTilt: 0, legSpeed: 1.0, mandibleOpen: 0,
     headDip: 0, abdomenPulse: 1.0, antennaSpeed: 1.0,
@@ -404,7 +407,7 @@ AF.renderer.ant = function(ctx, ant, hoveredAnt, particles) {
   ctx.beginPath(); ctx.moveTo(hdX + s * 0.25, hdY - s * 0.08); ctx.lineTo(hdX + s * 0.6, hdY - s * 0.2 - mO * s * 0.8); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(hdX + s * 0.25, hdY + s * 0.08); ctx.lineTo(hdX + s * 0.6, hdY + s * 0.2 + mO * s * 0.8); ctx.stroke();
 
-  // Sand grain
+  // Sand grain (gray to match sand)
   if (ant.carryingSand > 0) {
     const grainSize = s * (0.18 + ant.carryingSand * 0.04);
     ctx.fillStyle = `rgb(${SAND_R},${SAND_G},${SAND_B})`;
@@ -423,29 +426,29 @@ AF.renderer.ant = function(ctx, ant, hoveredAnt, particles) {
 
   // Food
   if (ant.carrying) {
-    ctx.fillStyle = '#78b840';
+    ctx.fillStyle = '#5a8a30';
     ctx.beginPath(); ctx.arc(hdX + s * 0.45, hdY - s * 0.05, s * 0.25, 0, 6.28); ctx.fill();
   }
 
   // Queen marker
   if (ant.isQueen) {
-    ctx.fillStyle = 'rgba(255,200,50,0.6)';
+    ctx.fillStyle = 'rgba(200,170,50,0.6)';
     ctx.beginPath(); ctx.arc(thX, thY - s * 0.5, s * 0.15, 0, 6.28); ctx.fill();
   }
 
   // Hover highlight
   if (hoveredAnt === ant) {
-    ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(0,0,0,0.3)'; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.ellipse(0, 0, s * 2.2, s * 1.5, 0, 0, 6.28); ctx.stroke();
   }
 
-  // Dig dust
+  // Dig dust (gray particles)
   if (posture.dustChance > 0 && Math.random() < posture.dustChance && mov && particles) {
     particles.push({
       x: ant.x + (facingRight * s * 1.5), y: ant.y + s * 0.3,
       vx: (Math.random() - 0.5) * 1.5 * facingRight, vy: Math.random() * -1.2 - 0.3,
       life: 15 + Math.random() * 10, size: 0.8 + Math.random() * 0.8,
-      r: SAND_R - 5, g: SAND_G - 5, b: SAND_B - 3
+      r: SAND_R, g: SAND_G, b: SAND_B
     });
   }
 
@@ -475,10 +478,8 @@ AF.renderer.fallingObjects = function(ctx, objects) {
         ctx.beginPath(); ctx.moveTo(lx, 0); ctx.lineTo(lx + s * 0.3, -s * 0.7); ctx.stroke();
       }
     } else if (f.type === 'food') {
-      ctx.fillStyle = f.color || '#b48c50';
+      ctx.fillStyle = f.color || '#7a6a50';
       ctx.beginPath(); ctx.arc(0, 0, 2.5, 0, 6.28); ctx.fill();
-      ctx.fillStyle = 'rgba(255,255,255,0.3)';
-      ctx.beginPath(); ctx.arc(-0.5, -0.5, 1, 0, 6.28); ctx.fill();
     }
     ctx.restore();
   }

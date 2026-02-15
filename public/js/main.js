@@ -1,5 +1,5 @@
 // =====================================================================
-//  ANTFARM v10 — Main: game loop, HUD, events, initialization
+//  ANTFARM v11 — Main: game loop, HUD, events, initialization
 // =====================================================================
 
 'use strict';
@@ -20,6 +20,7 @@ let elStatusText, elTooltip;
 let elTtName, elTtState, elTtEnergy, elTtRole, elTtThought;
 let elIntelFocus, elIntelRoles, elIntelTokens, elIntelInsight;
 let elAiNarration;
+let elIntelFocusDisplay, elIntelRolesDisplay, elIntelTokensDisplay, elIntelInsightDisplay;
 
 // ═══════════════════════════════════════════════════════════════════
 //  INITIALIZATION
@@ -55,25 +56,28 @@ async function begin() {
   elIntelTokens = document.getElementById('intelTokens');
   elIntelInsight = document.getElementById('intelInsight');
   elAiNarration = document.getElementById('aiNarration');
+  elIntelFocusDisplay = document.getElementById('intelFocusDisplay');
+  elIntelRolesDisplay = document.getElementById('intelRolesDisplay');
+  elIntelTokensDisplay = document.getElementById('intelTokensDisplay');
+  elIntelInsightDisplay = document.getElementById('intelInsightDisplay');
 
   // Try to load checkpoint from server
-  elStatusText.textContent = 'Loading colony...';
   const saved = await AF.network.fetchCheckpoint();
 
   if (saved && saved.checkpoint) {
     try {
       state = AF.colony.deserialize(saved.checkpoint);
       if (saved.directive) AF.colony.applyDirective(state, saved.directive);
-      elStatusText.textContent = 'Colony restored — Day ' + state.simDay;
     } catch (e) {
       console.warn('Failed to restore checkpoint, starting fresh:', e);
       state = AF.colony.create();
-      elStatusText.textContent = 'New colony started';
     }
   } else {
     state = AF.colony.create();
-    elStatusText.textContent = 'New colony started';
   }
+
+  // Force terrain redraw for new visual style
+  state.terrainDirty = true;
 
   resizeCanvas();
   running = true;
@@ -153,9 +157,9 @@ function updateHUD() {
   elSTunnel.textContent = pct + '%';
   elSChambers.textContent = state.chambers.length;
   elSDay.textContent = state.simDay;
-  elStatusText.textContent = 'Day ' + state.simDay;
+  if (elStatusText) elStatusText.textContent = 'Day ' + state.simDay;
 
-  // Intelligence panel
+  // Intelligence data (tracked in hidden elements)
   updateIntelBar();
 }
 
@@ -169,26 +173,59 @@ function updateIntelBar() {
     explore: 'Exploring new paths'
   };
 
-  if (state.directive) {
-    elIntelFocus.textContent = FOCUS_LABELS[state.directive.focus] || state.directive.focus || 'Observing colony';
+  const PHASE_LABELS = {
+    shaft: 'Extending main shaft',
+    gallery: 'Branching galleries',
+    chamber: 'Carving chambers',
+    expand: 'Expanding colony',
+  };
+
+  // Use AI directive focus if available, else colony phase, else fallback
+  let focusText;
+  if (state.directive && FOCUS_LABELS[state.directive.focus]) {
+    focusText = FOCUS_LABELS[state.directive.focus];
+  } else if (state.colonyGoals && PHASE_LABELS[state.colonyGoals.phase]) {
+    focusText = PHASE_LABELS[state.colonyGoals.phase];
+  } else {
+    focusText = 'Observing colony';
   }
 
-  const roles = AF.colony.getRoleCounts(state);
-  elIntelRoles.innerHTML =
-    '<span style="color:#d4a462">D:' + roles.digger + '</span> digging · ' +
-    '<span style="color:#7bb84a">F:' + roles.forager + '</span> foraging · ' +
-    '<span style="color:#6baed6">E:' + roles.explorer + '</span> exploring · ' +
-    '<span style="color:#999">I:' + roles.idle + '</span> idle';
+  if (elIntelFocus) elIntelFocus.textContent = focusText;
+  if (elIntelFocusDisplay) elIntelFocusDisplay.textContent = focusText;
+
+  if (elIntelRoles || elIntelRolesDisplay) {
+    const roles = AF.colony.getRoleCounts(state);
+    const rolesText = 'D:' + roles.digger + ' · F:' + roles.forager + ' · E:' + roles.explorer + ' · I:' + roles.idle;
+    if (elIntelRoles) elIntelRoles.innerHTML = rolesText;
+    if (elIntelRolesDisplay) elIntelRolesDisplay.textContent = rolesText;
+  }
 
   if (state.tokenUsage && state.tokenUsage.total > 0) {
     const cum = state.tokenUsage.cumulative || state.tokenUsage.total;
-    elIntelTokens.innerHTML =
-      '<span class="tok-num">' + formatTokens(cum) + '</span> tokens · ' +
-      '<span class="tok-num">' + (state.tokenUsage.calls || 1) + '</span> thoughts';
+    const tokensText = formatTokens(cum) + ' tokens · ' + (state.tokenUsage.calls || 1) + ' thoughts';
+    if (elIntelTokens) elIntelTokens.innerHTML = tokensText;
+    if (elIntelTokensDisplay) elIntelTokensDisplay.textContent = tokensText;
   }
 
-  if (state.insight) {
-    elIntelInsight.textContent = state.insight;
+  // Generate insight from colony goals if no AI insight available
+  let insightText = state.insight;
+  if (!insightText && state.colonyGoals) {
+    const g = state.colonyGoals;
+    if (g.phase === 'shaft' && g.shaftDepth < 10) {
+      insightText = 'A young colony\u2019s greatest weakness is time\u2014every idle ant is potential energy spent on s...';
+    } else if (g.phase === 'shaft') {
+      insightText = 'The main shaft is the colony\u2019s lifeline\u2014depth means safety and opportunity...';
+    } else if (g.phase === 'gallery') {
+      insightText = 'Branching galleries distribute the workforce and open new territory...';
+    } else if (g.phase === 'chamber') {
+      insightText = 'Chambers are where the real work of the colony happens\u2014storage, rest, nurseries...';
+    } else if (g.phase === 'expand') {
+      insightText = 'A thriving colony never stops growing\u2014new tunnels bring new possibilities...';
+    }
+  }
+  if (insightText) {
+    if (elIntelInsight) elIntelInsight.textContent = insightText;
+    if (elIntelInsightDisplay) elIntelInsightDisplay.textContent = insightText;
   }
 
   if (state.narration && elAiNarration) {
@@ -257,7 +294,6 @@ document.addEventListener('keydown', e => {
 });
 document.addEventListener('keyup', e => keysDown.delete(e.key.toLowerCase()));
 
-// Admin actions (applied directly to client-side state)
 function adminAction(action, value) {
   if (!state) return;
 
@@ -275,7 +311,7 @@ function adminAction(action, value) {
     toast('Added 5 ants');
   } else if (action === 'dropFood') {
     AF.colony.dropFood(state);
-    const colors = ['#b48c50', '#e8d8b0', '#c85028', '#5a3c1e'];
+    const colors = ['#7a6a50', '#a09080', '#6a5a40'];
     for (let i = 0; i < 6; i++) {
       fallingObjects.push({
         type: 'food',
@@ -304,7 +340,6 @@ function restartColony() {
   terrainParticles = [];
   fallingObjects = [];
   hoveredAnt = null;
-  // Force save fresh state
   AF.network.lastSave = 0;
   AF.network.saveCheckpoint(state).catch(() => {});
   toast('Colony restarted!');
