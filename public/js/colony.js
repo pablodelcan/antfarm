@@ -33,6 +33,18 @@ AF.colony.create = function() {
     tokenUsage: null,
     digPriority: 7,
 
+    // AI-tunable behavioral parameters (adjusted by hourly cron)
+    tuning: {
+      restThreshold: 20,
+      explorationBias: 0.3,
+      forageRadius: 200,
+      branchingChance: 0.15,
+      chamberSizeTarget: 60,
+      antMaxEnergy: 100,
+      queenSpawnRate: 1800,
+      sandCarryMax: 5,
+    },
+
     // Colony intelligence
     colonyGoals: null, // initialized by behavior.updateColonyGoals
   };
@@ -96,8 +108,9 @@ AF.colony.tick = function(state) {
     }
   }
 
-  // Queen spawns new ant every 30 seconds (1800 frames at 60fps)
-  if (state.frame % 1800 === 0 && state.hasQueen && state.ants.length < 60) {
+  // Queen spawns new ant (rate tunable by AI cron)
+  const spawnRate = (state.tuning && state.tuning.queenSpawnRate) || 1800;
+  if (state.frame % spawnRate === 0 && state.hasQueen && state.ants.length < 60) {
     const queen = state.ants.find(a => a.isQueen);
     if (queen) {
       const baby = AF.ant.create(
@@ -204,6 +217,20 @@ AF.colony.applyDirective = function(state, directive) {
     default:              state.digPriority = 5; break;
   }
 
+  // Apply tuning parameters from hourly cron evolution
+  if (directive.tuning) {
+    const t = directive.tuning;
+    if (t.digPriority != null) state.digPriority = AF.clamp(t.digPriority, 1, 10);
+    if (t.restThreshold != null) state.tuning.restThreshold = AF.clamp(t.restThreshold, 0, 100);
+    if (t.explorationBias != null) state.tuning.explorationBias = AF.clamp(t.explorationBias, 0, 1);
+    if (t.forageRadius != null) state.tuning.forageRadius = AF.clamp(t.forageRadius, 50, 400);
+    if (t.branchingChance != null) state.tuning.branchingChance = AF.clamp(t.branchingChance, 0, 1);
+    if (t.chamberSizeTarget != null) state.tuning.chamberSizeTarget = AF.clamp(t.chamberSizeTarget, 40, 200);
+    if (t.antMaxEnergy != null) state.tuning.antMaxEnergy = AF.clamp(t.antMaxEnergy, 50, 200);
+    if (t.queenSpawnRate != null) state.tuning.queenSpawnRate = AF.clamp(t.queenSpawnRate, 600, 5400);
+    if (t.sandCarryMax != null) state.tuning.sandCarryMax = AF.clamp(t.sandCarryMax, 1, 10);
+  }
+
   // Role shifts: nudge some ants between states
   if (directive.role_shift) {
     const rs = directive.role_shift;
@@ -300,6 +327,7 @@ AF.colony.serialize = function(state) {
     hasQueen: state.hasQueen, entranceX: state.entranceX,
     narration: state.narration, insight: state.insight,
     digPriority: state.digPriority,
+    tuning: state.tuning,
     colonyGoals: state.colonyGoals,
     nextId: AF.ant.getNextId(),
   };
@@ -325,6 +353,16 @@ AF.colony.deserialize = function(data) {
     directive: null,
     tokenUsage: null,
     digPriority: data.digPriority || 7,
+    tuning: data.tuning || {
+      restThreshold: 20,
+      explorationBias: 0.3,
+      forageRadius: 200,
+      branchingChance: 0.15,
+      chamberSizeTarget: 60,
+      antMaxEnergy: 100,
+      queenSpawnRate: 1800,
+      sandCarryMax: 5,
+    },
     colonyGoals: data.colonyGoals || null,
   };
 

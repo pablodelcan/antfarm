@@ -8,7 +8,7 @@
   @import url('https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=Inter:wght@300;400;500;600;700;800;900&display=swap');
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
-    background: #e8e5e0; color: #1a1a1a;
+    background: #000; color: #1a1a1a;
     font-family: 'Inter', -apple-system, sans-serif;
     height: 100vh; overflow: hidden; -webkit-font-smoothing: antialiased;
   }
@@ -33,121 +33,134 @@
   }
   .intro button:hover { border-color: #1a1a1a; background: #1a1a1a; color: #fff; }
 
-  /* ── App Layout ── */
+  /* ── App Layout — FULLSCREEN ── */
   .app {
-    display: none; height: 100vh; flex-direction: column;
-    align-items: center; justify-content: center;
-    padding: 20px;
+    display: none; width: 100vw; height: 100vh;
+    position: relative; overflow: hidden;
   }
 
-  /* ── Main Card ── */
-  .main-card {
-    background: #fff;
-    border-radius: 20px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.04);
-    display: flex; flex-direction: column;
-    max-width: 1100px; width: 100%;
-    max-height: 100%;
-    overflow: hidden;
-  }
-
-  /* ── Topbar ── */
-  .topbar {
-    display: flex; align-items: baseline; justify-content: space-between;
-    padding: 18px 28px 14px; flex-shrink: 0;
-  }
-  .topbar .title {
-    font-family: 'EB Garamond', serif; font-size: 1.8rem; font-weight: 400;
-    font-style: italic; letter-spacing: -0.01em; line-height: 1;
-  }
-  .topbar .stats {
-    display: flex; gap: 24px; font-size: 0.82rem; color: #1a1a1a;
-    align-items: baseline;
-  }
-  .topbar .stats .stat-group {
-    display: flex; align-items: baseline; gap: 6px;
-  }
-  .topbar .stats .stat-label {
-    font-weight: 400; font-size: 0.82rem; color: #1a1a1a;
-  }
-  .topbar .stats .stat-val {
-    font-weight: 700; font-size: 0.82rem; font-variant-numeric: tabular-nums;
-  }
-
-  /* ── Intel Bar ── */
-  .intel-bar {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 0 28px 12px; flex-shrink: 0;
-    font-size: 0.68rem; color: #888; gap: 12px;
-    border-bottom: 1px solid #f0f0f0;
-  }
-  .intel-bar .intel-left {
-    display: flex; align-items: center; gap: 12px;
-  }
-  .intel-bar .intel-dot {
-    width: 5px; height: 5px; border-radius: 50%; background: #1a1a1a; flex-shrink: 0;
-  }
-  .intel-bar .intel-label {
-    font-weight: 600; color: #1a1a1a; font-size: 0.68rem;
-  }
-  .intel-bar .intel-focus {
-    font-family: 'EB Garamond', serif; font-style: italic; font-size: 0.82rem;
-    color: #1a1a1a; font-weight: 500;
-  }
-  .intel-bar .intel-sep {
-    color: #ccc; font-size: 0.72rem;
-  }
-  .intel-bar .intel-roles {
-    color: #999; font-size: 0.65rem; letter-spacing: 0.02em;
-  }
-  .intel-bar .intel-right {
-    display: flex; align-items: center; gap: 8px;
-    font-family: 'EB Garamond', serif; font-style: italic; font-size: 0.78rem;
-    color: #bbb;
-  }
-
-  /* ── Canvas Area ── */
+  /* ── Canvas — fills entire viewport ── */
   .canvas-wrap {
-    flex: 1; position: relative; overflow: hidden;
+    position: absolute; inset: 0;
     display: flex; align-items: center; justify-content: center;
-    min-height: 0;
+    background: #000;
   }
   .canvas-wrap canvas {
-    display: block; cursor: crosshair; width: 100%; height: 100%;
-    border: 1px solid #e0e0e0; border-radius: 2px;
+    display: block; cursor: crosshair;
   }
 
-  /* ── Bottom Bar ── */
-  .bottombar {
-    display: flex; align-items: center; justify-content: center;
-    padding: 10px 28px; flex-shrink: 0;
+  /* ── Overlay UI — floats on top of canvas ── */
+  .overlay-top {
+    position: absolute; top: 0; left: 0; right: 0;
+    display: flex; align-items: baseline; justify-content: space-between;
+    padding: 16px 24px 12px;
+    background: linear-gradient(to bottom, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0.15) 60%, transparent 100%);
+    pointer-events: none; z-index: 10;
   }
-  .bottombar .status {
-    font-size: 0.72rem; color: #1a1a1a; font-weight: 600;
+  .overlay-top .title {
+    font-family: 'EB Garamond', serif; font-size: 1.6rem; font-weight: 400;
+    font-style: italic; letter-spacing: -0.01em; line-height: 1;
+    color: #fff; pointer-events: auto;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  }
+  .overlay-top .stats {
+    display: flex; gap: 20px; font-size: 0.75rem; color: rgba(255,255,255,0.85);
+    align-items: baseline;
+  }
+  .overlay-top .stats .stat-group {
+    display: flex; align-items: baseline; gap: 5px;
+  }
+  .overlay-top .stats .stat-label {
+    font-weight: 400; font-size: 0.72rem; color: rgba(255,255,255,0.6);
+  }
+  .overlay-top .stats .stat-val {
+    font-weight: 700; font-size: 0.75rem; font-variant-numeric: tabular-nums;
+    color: #fff;
+  }
+
+  /* ── Intel Bar — below topbar ── */
+  .overlay-intel {
+    position: absolute; top: 48px; left: 0; right: 0;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px 8px;
+    font-size: 0.65rem; color: rgba(255,255,255,0.5); gap: 12px;
+    pointer-events: none; z-index: 10;
+  }
+  .overlay-intel .intel-left {
+    display: flex; align-items: center; gap: 10px;
+  }
+  .overlay-intel .intel-dot {
+    width: 5px; height: 5px; border-radius: 50%; background: rgba(255,255,255,0.7); flex-shrink: 0;
+  }
+  .overlay-intel .intel-label {
+    font-weight: 600; color: rgba(255,255,255,0.7); font-size: 0.65rem;
+  }
+  .overlay-intel .intel-focus {
+    font-family: 'EB Garamond', serif; font-style: italic; font-size: 0.78rem;
+    color: rgba(255,255,255,0.8); font-weight: 500;
+  }
+  .overlay-intel .intel-sep {
+    color: rgba(255,255,255,0.25); font-size: 0.68rem;
+  }
+  .overlay-intel .intel-roles {
+    color: rgba(255,255,255,0.45); font-size: 0.62rem; letter-spacing: 0.02em;
+  }
+  .overlay-intel .intel-right {
+    display: flex; align-items: center; gap: 8px;
+    font-family: 'EB Garamond', serif; font-style: italic; font-size: 0.74rem;
+    color: rgba(255,255,255,0.4);
+  }
+
+  /* ── Bottom Bar — overlay ── */
+  .overlay-bottom {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    display: flex; align-items: center; justify-content: center;
+    padding: 12px 24px;
+    background: linear-gradient(to top, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0.1) 60%, transparent 100%);
+    pointer-events: none; z-index: 10;
+  }
+  .overlay-bottom .status {
+    font-size: 0.68rem; color: rgba(255,255,255,0.6); font-weight: 600;
     display: flex; align-items: center; gap: 6px;
   }
-  .bottombar .status .dot {
-    width: 6px; height: 6px; border-radius: 50%; background: #1a1a1a;
+  .overlay-bottom .status .dot {
+    width: 5px; height: 5px; border-radius: 50%; background: rgba(255,255,255,0.5);
+  }
+
+  /* ── Viewers count ── */
+  .overlay-viewers {
+    position: absolute; bottom: 12px; right: 24px;
+    font-size: 0.62rem; color: rgba(255,255,255,0.35);
+    pointer-events: none; z-index: 10;
+    display: flex; align-items: center; gap: 5px;
+  }
+  .overlay-viewers .live-dot {
+    width: 6px; height: 6px; border-radius: 50%; background: #e74c3c;
+    animation: livePulse 2s ease-in-out infinite;
+  }
+  @keyframes livePulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
   }
 
   /* ── Tooltip ── */
   .ant-tooltip {
     position: fixed; pointer-events: none;
-    background: rgba(255,255,255,0.95); backdrop-filter: blur(8px);
-    border: 1px solid #e0e0e0; padding: 8px 12px;
-    font-size: 0.68rem; line-height: 1.5; color: #555;
+    background: rgba(0,0,0,0.85); backdrop-filter: blur(8px);
+    border: 1px solid rgba(255,255,255,0.1); padding: 8px 12px;
+    font-size: 0.68rem; line-height: 1.5; color: rgba(255,255,255,0.7);
     z-index: 50; opacity: 0; transition: opacity 0.15s ease; max-width: 220px; white-space: nowrap;
     border-radius: 8px;
   }
   .ant-tooltip.show { opacity: 1; }
-  .ant-tooltip .tt-name { color: #1a1a1a; font-weight: 500; margin-bottom: 2px; font-size: 0.72rem; }
+  .ant-tooltip .tt-name { color: #fff; font-weight: 500; margin-bottom: 2px; font-size: 0.72rem; }
   .ant-tooltip .tt-row { display: flex; justify-content: space-between; gap: 12px; }
-  .ant-tooltip .tt-val { color: #1a1a1a; font-weight: 500; }
+  .ant-tooltip .tt-val { color: #fff; font-weight: 500; }
 
   /* ── Toast ── */
   .toast {
     position: fixed; bottom: 48px; left: 50%; transform: translateX(-50%) translateY(8px);
-    background: #1a1a1a; color: #fff; padding: 8px 20px; font-size: 0.72rem;
+    background: rgba(255,255,255,0.95); color: #1a1a1a; padding: 8px 20px; font-size: 0.72rem;
     opacity: 0; transition: all 0.25s ease; z-index: 90; pointer-events: none;
     border-radius: 6px;
   }
@@ -180,47 +193,55 @@
 <div class="intro">
   <h1>Antfarm</h1>
   <div class="sub">A living colony powered by Claude AI</div>
-  <div class="sub2">v11</div>
+  <div class="sub2">v12</div>
   <button onclick="begin()">Enter</button>
 </div>
 
-<!-- Main App -->
+<!-- Main App — Fullscreen -->
 <div class="app" id="app">
-  <div class="main-card">
-    <div class="topbar">
-      <div class="title">Antfarm</div>
-      <div class="stats">
-        <div class="stat-group"><span class="stat-label">Population</span><span class="stat-val" id="sAnts">0</span></div>
-        <div class="stat-group"><span class="stat-label">Tunneled</span><span class="stat-val" id="sTunnel">0%</span></div>
-        <div class="stat-group"><span class="stat-label">Chambers</span><span class="stat-val" id="sChambers">0</span></div>
-        <div class="stat-group"><span class="stat-label">Day</span><span class="stat-val" id="sDay">1</span></div>
-      </div>
-    </div>
+  <!-- Canvas fills entire viewport -->
+  <div class="canvas-wrap" id="wrap">
+    <canvas id="c"></canvas>
+  </div>
 
-    <div class="intel-bar" id="intelBar">
-      <div class="intel-left">
-        <span class="intel-dot"></span>
-        <span class="intel-label">Claude AI</span>
-        <span class="intel-sep">|</span>
-        <span class="intel-focus" id="intelFocusDisplay">Observing colony</span>
-        <span class="intel-roles" id="intelRolesDisplay"></span>
-        <span class="intel-roles" id="intelTokensDisplay"></span>
-      </div>
-      <div class="intel-right">
-        <span id="intelInsightDisplay"></span>
-      </div>
+  <!-- Overlay: Top bar -->
+  <div class="overlay-top">
+    <div class="title">Antfarm</div>
+    <div class="stats">
+      <div class="stat-group"><span class="stat-label">Population</span><span class="stat-val" id="sAnts">0</span></div>
+      <div class="stat-group"><span class="stat-label">Tunneled</span><span class="stat-val" id="sTunnel">0%</span></div>
+      <div class="stat-group"><span class="stat-label">Chambers</span><span class="stat-val" id="sChambers">0</span></div>
+      <div class="stat-group"><span class="stat-label">Day</span><span class="stat-val" id="sDay">1</span></div>
     </div>
+  </div>
 
-    <div class="canvas-wrap" id="wrap">
-      <canvas id="c"></canvas>
+  <!-- Overlay: Intel bar -->
+  <div class="overlay-intel" id="intelBar">
+    <div class="intel-left">
+      <span class="intel-dot"></span>
+      <span class="intel-label">Claude AI</span>
+      <span class="intel-sep">|</span>
+      <span class="intel-focus" id="intelFocusDisplay">Observing colony</span>
+      <span class="intel-roles" id="intelRolesDisplay"></span>
+      <span class="intel-roles" id="intelTokensDisplay"></span>
     </div>
+    <div class="intel-right">
+      <span id="intelInsightDisplay"></span>
+    </div>
+  </div>
 
-    <div class="bottombar">
-      <div class="status">
-        <span class="dot"></span>
-        <span id="statusText">Day 1</span>
-      </div>
+  <!-- Overlay: Bottom bar -->
+  <div class="overlay-bottom">
+    <div class="status">
+      <span class="dot"></span>
+      <span id="statusText">Day 1</span>
     </div>
+  </div>
+
+  <!-- Overlay: Live indicator -->
+  <div class="overlay-viewers" id="viewersDisplay">
+    <span class="live-dot"></span>
+    <span>LIVE</span>
   </div>
 </div>
 
@@ -252,15 +273,15 @@
 </div>
 
 <!-- Scripts -->
-<script src="/js/constants.js?v=14"></script>
-<script src="/js/terrain.js?v=14"></script>
-<script src="/js/pheromones.js?v=14"></script>
-<script src="/js/ant.js?v=14"></script>
-<script src="/js/behavior.js?v=14"></script>
-<script src="/js/colony.js?v=14"></script>
-<script src="/js/renderer.js?v=14"></script>
-<script src="/js/network.js?v=14"></script>
-<script src="/js/main.js?v=14"></script>
+<script src="/js/constants.js?v=15"></script>
+<script src="/js/terrain.js?v=15"></script>
+<script src="/js/pheromones.js?v=15"></script>
+<script src="/js/ant.js?v=15"></script>
+<script src="/js/behavior.js?v=15"></script>
+<script src="/js/colony.js?v=15"></script>
+<script src="/js/renderer.js?v=15"></script>
+<script src="/js/network.js?v=15"></script>
+<script src="/js/main.js?v=15"></script>
 
 </body>
 </html>

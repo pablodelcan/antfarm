@@ -180,7 +180,10 @@ function _sense(state, ant) {
 }
 
 function _findNearestFood(state, ant) {
-  let best = null, bestDist = 60;
+  // Forage radius tunable by AI cron
+  const radius = (state.tuning && state.tuning.forageRadius) || 200;
+  const maxDist = Math.min(radius, 400);
+  let best = null, bestDist = maxDist;
   for (const food of state.foods) {
     if (food.amount <= 0) continue;
     const d = Math.hypot(food.x - ant.x, food.y - ant.y);
@@ -197,8 +200,10 @@ function _think(state, ant, s) {
   const ST = AF.ST;
   const goals = state.colonyGoals;
 
-  // ── Rest check (biological need overrides all) ──
-  if (ant.state !== ST.REST && ant.timeSinceRest > B_REST_MIN + Math.random() * (B_REST_MAX - B_REST_MIN)) {
+  // ── Rest check (biological need overrides all — threshold tunable by AI) ──
+  const restThreshold = (state.tuning && state.tuning.restThreshold) || 20;
+  const restMinAdj = B_REST_MIN * (1 + (restThreshold - 20) / 100);
+  if (ant.state !== ST.REST && ant.timeSinceRest > restMinAdj + Math.random() * (B_REST_MAX - restMinAdj)) {
     if (ant.energy < 600 || ant.timeSinceRest > B_REST_MAX) {
       _changeState(ant, ST.REST);
       ant.restDuration = B_REST_DUR_MIN + (Math.random() * (B_REST_DUR_MAX - B_REST_DUR_MIN)) | 0;
@@ -264,6 +269,8 @@ function _think(state, ant, s) {
     // ── DIG: excavating with purpose ──
     case ST.DIG:
       // Sand full? MUST haul it to surface (no vanishing dirt!)
+      // maxSandCarry tunable by AI cron
+      ant.maxSandCarry = (state.tuning && state.tuning.sandCarryMax) || 5;
       if (ant.carryingSand >= ant.maxSandCarry) {
         _changeState(ant, ST.HAUL);
         AF.ant.setThought(ant, 'Hauling sand to surface');
@@ -388,7 +395,9 @@ function _think(state, ant, s) {
 
     // ── REST: recovery ──
     case ST.REST:
-      ant.energy = Math.min(ant.energy + 0.6, 1100);
+      // Max energy tunable by AI cron
+      var maxE = ((state.tuning && state.tuning.antMaxEnergy) || 100) * 11;
+      ant.energy = Math.min(ant.energy + 0.6, maxE);
       ant.vx *= 0.9;
       ant.vy *= 0.9;
       if (ant.stateTimer > ant.restDuration) {
@@ -503,17 +512,18 @@ function _assignUndergroundTask(state, ant, s, goals) {
   // Check dig pheromone — join existing dig if strong signal
   if (s.digGrad.strength > 0.05) return 'dig';
 
-  // Based on colony phase
+  // Based on colony phase (exploration bias tunable by AI)
+  const expBias = (state.tuning && state.tuning.explorationBias) || 0.3;
   if (goals) {
     switch (goals.phase) {
-      case 'shaft': return 'dig';
-      case 'gallery': return Math.random() < 0.7 ? 'dig' : 'explore';
-      case 'chamber': return Math.random() < 0.6 ? 'dig' : 'explore';
-      case 'expand': return Math.random() < 0.5 ? 'dig' : 'explore';
+      case 'shaft': return Math.random() < (1 - expBias * 0.3) ? 'dig' : 'explore';
+      case 'gallery': return Math.random() < (0.7 - expBias * 0.3) ? 'dig' : 'explore';
+      case 'chamber': return Math.random() < (0.6 - expBias * 0.2) ? 'dig' : 'explore';
+      case 'expand': return Math.random() < (0.5 - expBias * 0.2) ? 'dig' : 'explore';
     }
   }
 
-  return Math.random() < 0.7 ? 'dig' : 'explore';
+  return Math.random() < (0.7 - expBias * 0.3) ? 'dig' : 'explore';
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -646,8 +656,10 @@ function _moveDig(state, ant, s, spd) {
   const nearSurface = depthBelow < 20;
   const goals = state.colonyGoals;
 
-  // Natural heading perturbation
-  if (Math.random() < (nearSurface ? 0.002 : B_BRANCH_CHANCE)) {
+  // Natural heading perturbation (branching chance tunable by AI)
+  const branchChance = (state.tuning && state.tuning.branchingChance) || 0.15;
+  const effectiveBranch = nearSurface ? 0.002 : B_BRANCH_CHANCE * (1 + branchChance);
+  if (Math.random() < effectiveBranch) {
     ant.digAngle += (Math.random() - 0.5) * (nearSurface ? 0.2 : 0.6);
   }
 

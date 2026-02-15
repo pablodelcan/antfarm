@@ -1,5 +1,6 @@
 // =====================================================================
-//  ANTFARM v11 — Main: game loop, HUD, events, initialization
+//  ANTFARM v12 — Main: game loop, HUD, events, initialization
+//  Fullscreen canvas, live shared view
 // =====================================================================
 
 'use strict';
@@ -30,7 +31,7 @@ async function begin() {
   // Hide intro, show app
   document.querySelector('.intro').classList.add('hide');
   setTimeout(() => { document.querySelector('.intro').style.display = 'none'; }, 800);
-  document.getElementById('app').style.display = 'flex';
+  document.getElementById('app').style.display = 'block';
 
   // Canvas setup
   canvas = document.getElementById('c');
@@ -117,6 +118,23 @@ function gameLoop() {
   AF.network.saveCheckpoint(state).catch(() => {});
   AF.network.pollDirective(state).catch(() => {});
 
+  // Live sync: non-leader clients periodically reload state from server
+  AF.network.syncFromServer(state).then(function(data) {
+    if (data && data.checkpoint) {
+      try {
+        var synced = AF.colony.deserialize(data.checkpoint);
+        if (data.directive) AF.colony.applyDirective(synced, data.directive);
+        // Only apply if server state is newer (higher frame count)
+        if (synced.frame > state.frame) {
+          synced.terrainDirty = true;
+          state = synced;
+        }
+      } catch (e) {
+        // Silent fail — keep running local sim
+      }
+    }
+  }).catch(function() {});
+
   requestAnimationFrame(gameLoop);
 }
 
@@ -195,14 +213,14 @@ function updateIntelBar() {
 
   if (elIntelRoles || elIntelRolesDisplay) {
     const roles = AF.colony.getRoleCounts(state);
-    const rolesText = 'D:' + roles.digger + ' · F:' + roles.forager + ' · E:' + roles.explorer + ' · I:' + roles.idle;
+    const rolesText = 'D:' + roles.digger + ' \u00b7 F:' + roles.forager + ' \u00b7 E:' + roles.explorer + ' \u00b7 I:' + roles.idle;
     if (elIntelRoles) elIntelRoles.innerHTML = rolesText;
     if (elIntelRolesDisplay) elIntelRolesDisplay.textContent = rolesText;
   }
 
   if (state.tokenUsage && state.tokenUsage.total > 0) {
     const cum = state.tokenUsage.cumulative || state.tokenUsage.total;
-    const tokensText = formatTokens(cum) + ' tokens · ' + (state.tokenUsage.calls || 1) + ' thoughts';
+    const tokensText = formatTokens(cum) + ' tokens \u00b7 ' + (state.tokenUsage.calls || 1) + ' thoughts';
     if (elIntelTokens) elIntelTokens.innerHTML = tokensText;
     if (elIntelTokensDisplay) elIntelTokensDisplay.textContent = tokensText;
   }
@@ -357,21 +375,27 @@ function toast(msg) {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-//  CANVAS RESIZE
+//  CANVAS RESIZE — fullscreen, maintain aspect ratio, centered
 // ═══════════════════════════════════════════════════════════════════
 
 function resizeCanvas() {
-  const wrap = document.getElementById('wrap');
-  if (!wrap || !canvas) return;
+  if (!canvas) return;
   const aspect = AF.W / AF.H;
-  const wW = wrap.clientWidth, wH = wrap.clientHeight;
+  const wW = window.innerWidth, wH = window.innerHeight;
+
+  let cW, cH;
   if (wW / wH > aspect) {
-    canvas.style.height = wH + 'px';
-    canvas.style.width = (wH * aspect) + 'px';
+    // Window is wider than canvas aspect — fit height, letterbox sides
+    cH = wH;
+    cW = wH * aspect;
   } else {
-    canvas.style.width = wW + 'px';
-    canvas.style.height = (wW / aspect) + 'px';
+    // Window is taller — fit width, letterbox top/bottom
+    cW = wW;
+    cH = wW / aspect;
   }
+
+  canvas.style.width = cW + 'px';
+  canvas.style.height = cH + 'px';
 }
 
 window.addEventListener('resize', resizeCanvas);
