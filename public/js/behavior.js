@@ -26,6 +26,8 @@ const B_STUCK_DROP = 20;
 const B_ENTER_PATIENCE = 80;
 const B_SATURATION = 5.0;
 const B_BRANCH_CHANCE = 0.008;
+const B_HUNGER_THRESHOLD = 350;  // energy below this = hungry, seek food
+const B_HUNGER_CRITICAL = 150;   // critically low — desperate for food
 
 // ── Colony Goal Priorities (shared brain) ──
 // Updated every 120 frames based on colony state
@@ -228,6 +230,21 @@ function _think(state, ant, s) {
     }
   }
 
+  // ── Hunger check (survival need — overrides work states) ──
+  if (ant.state !== ST.REST && ant.state !== ST.HUNGRY && !ant.isQueen) {
+    if (ant.energy < B_HUNGER_THRESHOLD) {
+      // Drop whatever we're doing and seek food
+      if (ant.carrying) ant.carrying = false;
+      _changeState(ant, ST.HUNGRY);
+      if (ant.energy < B_HUNGER_CRITICAL) {
+        AF.ant.setThought(ant, 'Starving!');
+      } else {
+        AF.ant.setThought(ant, 'Need food');
+      }
+      return;
+    }
+  }
+
   // ── Stuck escape ──
   if (ant.stuck >= B_STUCK_TELEPORT) {
     _unstick(state, ant);
@@ -319,7 +336,6 @@ function _think(state, ant, s) {
         }
         ant.carryingSand = 0;
         _changeState(ant, ST.IDLE);
-        ant.energy = Math.min(ant.energy + 30, 1100); // small energy from completing task
         AF.ant.setThought(ant, 'Sand deposited on surface');
         return;
       }
@@ -358,7 +374,8 @@ function _think(state, ant, s) {
       if (s.nearestFood && Math.hypot(s.nearestFood.x - ant.x, s.nearestFood.y - ant.y) < AF.CELL * 3) {
         s.nearestFood.amount -= 1;
         ant.carrying = true;
-        ant.energy = Math.min(ant.energy + 100, 1100);
+        // Small nibble while picking up food (ants taste what they find)
+        ant.energy = Math.min(ant.energy + 20, ((state.tuning && state.tuning.antMaxEnergy) || 100) * 11);
         _changeState(ant, ST.CARRY);
         AF.ant.setThought(ant, 'Found food!');
         return;
@@ -381,7 +398,7 @@ function _think(state, ant, s) {
           const distToStore = Math.hypot(foodChamber.x - ant.x, foodChamber.y - ant.y);
           if (distToStore < AF.CELL * 6) {
             ant.carrying = false;
-            ant.energy = Math.min(ant.energy + 150, 1100);
+            // No big energy bonus — ant must eat separately from food stores
             // Add to food stores
             if (!state.foodStores) state.foodStores = [];
             const existing = state.foodStores.find(f =>
@@ -412,7 +429,6 @@ function _think(state, ant, s) {
         } else if (s.atSurface) {
           // No food chamber or on surface — deposit on surface as before
           ant.carrying = false;
-          ant.energy = Math.min(ant.energy + 200, 1100);
           // If chambers exist, create a food drop that ants can later store
           if (state.chambers.length > 0) {
             state.foods.push({
@@ -534,11 +550,45 @@ function _think(state, ant, s) {
       }
       break;
 
+    // ── HUNGRY: seeking food to eat (survival behavior) ──
+    case ST.HUNGRY:
+      {
+        // Look for food to eat — food stores underground, or surface food
+        const foodStore = _findNearestFoodStore(state, ant);
+        if (foodStore) {
+          const distToFood = Math.hypot(foodStore.x - ant.x, foodStore.y - ant.y);
+          if (distToFood < AF.CELL * 3) {
+            // Eat! Consume food and restore energy
+            foodStore.amount--;
+            const maxE = ((state.tuning && state.tuning.antMaxEnergy) || 100) * 11;
+            ant.energy = Math.min(ant.energy + 400, maxE);
+            _changeState(ant, ST.IDLE);
+            AF.ant.setThought(ant, 'Ate food, feeling better');
+            return;
+          }
+        }
+
+        // If starving too long without finding food, die
+        if (ant.energy <= 0) {
+          ant._dead = true;
+          return;
+        }
+
+        // After a long time hungry with no food found, rest to conserve energy
+        if (ant.stateTimer > 300 && !_findNearestFoodStore(state, ant)) {
+          _changeState(ant, ST.REST);
+          ant.restDuration = B_REST_DUR_MAX;
+          AF.ant.setThought(ant, 'No food... conserving energy');
+          return;
+        }
+      }
+      break;
+
     // ── REST: recovery ──
     case ST.REST:
       // Max energy tunable by AI cron
       var maxE = ((state.tuning && state.tuning.antMaxEnergy) || 100) * 11;
-      ant.energy = Math.min(ant.energy + 0.6, maxE);
+      ant.energy = Math.min(ant.energy + 0.3, maxE);
       ant.vx *= 0.9;
       ant.vy *= 0.9;
       if (ant.stateTimer > ant.restDuration) {
@@ -786,6 +836,11 @@ function _act(state, ant, s) {
       _moveNurse(state, ant, s, spd);
       AF.pheromones.set(state, s.gx, s.gy, 0.06, 'phTrail');
       break;
+
+    case ST.HUNGRY:
+      _moveHungry(state, ant, s, spd);
+      AF.pheromones.set(state, s.gx, s.gy, 0.02, 'phTrail');
+      break;
   }
 
   // Animation
@@ -910,19 +965,19 @@ function _moveDig(state, ant, s, spd) {
     }
   }
 
-  // Chamber digging: when in chamber phase and deep enough, dig wider pattern
+  // Chamber digging: when in chamber phase and deep enough, widen horizontally
+  // Real chambers are flat & wide (pancake-shaped), same height as tunnels
   if (goals && goals.phase === 'chamber' && depthBelow > 30) {
-    if (ant.digCount > 5 && ant.digCount % 8 === 0) {
-      // Dig radially to create chamber space
-      for (let a = 0; a < 6.28; a += 1.0) {
-        const cx = s.gx + Math.round(Math.cos(a) * 2);
-        const cy = s.gy + Math.round(Math.sin(a) * 2);
-        if (AF.terrain.isSolid(state, cx, cy)) {
-          const dug = AF.terrain.dig(state, cx, cy);
-          if (dug) ant.carryingSand = Math.min(ant.carryingSand + 1, ant.maxSandCarry);
+    if (ant.digCount > 5 && ant.digCount % 6 === 0) {
+      // Dig 1-2 cells to the left and right (horizontal widening only)
+      for (const dx of [-1, 1, -2, 2]) {
+        const cx = s.gx + dx;
+        if (AF.terrain.isSolid(state, cx, s.gy) && ant.carryingSand < ant.maxSandCarry) {
+          const dug = AF.terrain.dig(state, cx, s.gy);
+          if (dug) ant.carryingSand++;
         }
       }
-      AF.ant.setThought(ant, 'Carving chamber walls');
+      AF.ant.setThought(ant, 'Widening chamber');
     }
   }
 
@@ -949,6 +1004,7 @@ function _moveDig(state, ant, s, spd) {
         ant.digCount++;
         ant.digCD = B_DIG_CD_BASE + (Math.random() * 4) | 0;
         ant.stuck = 0;
+        ant.energy -= 0.5; // digging is hard work
       }
     }
     // Dig current cell if stuck
@@ -956,12 +1012,15 @@ function _moveDig(state, ant, s, spd) {
       const dug = AF.terrain.dig(state, s.gx, s.gy);
       if (dug) ant.carryingSand = Math.min(ant.carryingSand + 1, ant.maxSandCarry);
     }
-    // Wider digging for galleries (every 3rd dig)
-    if (!nearSurface && ant.digCount % 3 === 0 && ant.carryingSand < ant.maxSandCarry) {
-      const d2x = s.gx + Math.round(Math.cos(ant.heading) * 2.5);
-      const d2y = s.gy + Math.round(Math.sin(ant.heading) * 2.5);
-      if (AF.terrain.isSolid(state, d2x, d2y)) {
-        const dug = AF.terrain.dig(state, d2x, d2y);
+    // Tunnels stay narrow (1-2 cells wide) like real ant tunnels
+    // Only widen slightly at branch points for turning room
+    if (!nearSurface && ant.digCount % 12 === 0 && ant.carryingSand < ant.maxSandCarry) {
+      // Occasional perpendicular dig for just enough room to turn
+      const perpAngle = ant.heading + (Math.random() < 0.5 ? Math.PI/2 : -Math.PI/2);
+      const px = s.gx + Math.round(Math.cos(perpAngle));
+      const py = s.gy + Math.round(Math.sin(perpAngle));
+      if (AF.terrain.isSolid(state, px, py)) {
+        const dug = AF.terrain.dig(state, px, py);
         if (dug) ant.carryingSand = Math.min(ant.carryingSand + 1, ant.maxSandCarry);
       }
     }
@@ -1127,6 +1186,31 @@ function _moveNurse(state, ant, s, spd) {
 
   ant.vx *= 0.88;
   ant.vy *= 0.88;
+}
+
+// ── Move while HUNGRY: navigate to nearest food to eat ──
+function _moveHungry(state, ant, s, spd) {
+  // Hungry ants move slower (conserving energy)
+  const hspd = spd * 0.7;
+  const store = _findNearestFoodStore(state, ant);
+  if (store) {
+    _moveToTarget(state, ant, s, hspd, store.x, store.y);
+    return;
+  }
+
+  // No food stores — try surface food
+  if (s.nearestFood) {
+    _moveToTarget(state, ant, s, hspd, s.nearestFood.x, s.nearestFood.y);
+    return;
+  }
+
+  // No food anywhere — head toward surface to look for food
+  if (s.underground) {
+    _moveUp(state, ant, s, hspd);
+  } else {
+    // Wander on surface looking for food, move sluggishly
+    _moveWander(ant, s, hspd * 0.5);
+  }
 }
 
 // ── Find hungry larva nearest to ant ──

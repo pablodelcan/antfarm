@@ -342,7 +342,15 @@ AF.renderer.ant = function(ctx, ant, hoveredAnt, particles) {
   ctx.rotate(visualAngle);
   if (posture.bodyTilt) ctx.rotate(posture.bodyTilt);
 
-  const bk = '#1a1a1a';
+  // Body color varies with hunger — starving ants look pale/weak
+  let bk;
+  if (ant.state === AF.ST.HUNGRY && ant.energy < 150) {
+    bk = '#666'; // critically starving — very pale
+  } else if (ant.state === AF.ST.HUNGRY) {
+    bk = '#444'; // hungry — noticeably lighter
+  } else {
+    bk = '#1a1a1a'; // healthy — dark
+  }
   const pp = p + 0.5; // pixel draw size (slight overlap prevents gaps)
 
   // Helper: draw one ant-pixel at sprite grid coords

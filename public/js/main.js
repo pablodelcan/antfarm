@@ -95,6 +95,24 @@ function gameLoop() {
   // Simulation tick
   AF.colony.tick(state);
 
+  // Process ant death events — emit particles
+  if (state._deaths && state._deaths.length > 0) {
+    for (const d of state._deaths) {
+      // Small burst of gray particles when ant dies
+      for (let i = 0; i < 6; i++) {
+        particles.push({
+          x: d.x, y: d.y,
+          vx: (Math.random() - 0.5) * 1.5,
+          vy: -Math.random() * 1.2,
+          life: 30 + (Math.random() * 20) | 0,
+          color: '#888',
+          size: 1.5 + Math.random(),
+        });
+      }
+    }
+    state._deaths = [];
+  }
+
   // Particle physics
   tickParticles();
 

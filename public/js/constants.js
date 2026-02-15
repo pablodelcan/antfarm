@@ -30,7 +30,7 @@ AF.TUNNEL_B = 40;
 AF.BASE_SPEED = 0.8;
 AF.LOADED_SPEED = 0.45;
 
-// 9-state machine (added NURSE for brood care)
+// 10-state machine (added HUNGRY for survival behavior)
 AF.ST = {
   IDLE:    0,
   ENTER:   1,
@@ -41,11 +41,13 @@ AF.ST = {
   EXPLORE: 6,
   REST:    7,
   NURSE:   8,
+  HUNGRY:  9,
 };
 
 AF.ST_NAMES = [
   'Idle', 'Entering', 'Digging', 'Hauling sand',
-  'Foraging', 'Carrying food', 'Exploring', 'Resting', 'Nursing brood'
+  'Foraging', 'Carrying food', 'Exploring', 'Resting', 'Nursing brood',
+  'Hungry'
 ];
 
 // Brood lifecycle stages

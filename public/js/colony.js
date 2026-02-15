@@ -126,8 +126,11 @@ AF.colony.tick = function(state) {
       ant.maturity = Math.min(1.0, ant.maturity + 0.00003); // full maturity ~33000 frames (~9 min)
     }
 
-    // Remove dead ants
+    // Remove dead ants — emit death event for visual effects
     if (ant._dead) {
+      // Store death position for particle effects
+      if (!state._deaths) state._deaths = [];
+      state._deaths.push({ x: ant.x, y: ant.y, name: ant.name });
       state.ants.splice(i, 1);
       if (ant.isQueen) state.hasQueen = false;
     }
