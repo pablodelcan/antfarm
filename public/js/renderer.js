@@ -149,13 +149,13 @@ function _drawFoodCluster(ctx, f, color) {
   const baseR = 3 + amt * 0.6;
   const seed = (f.x * 137 + f.y * 269) | 0;
   const crumbCount = Math.min(amt + 2, 8);
+  ctx.fillStyle = color;
   for (let i = 0; i < crumbCount; i++) {
     const h = ((seed + i * 7919) * 2654435761) >>> 0;
     const cx = f.x + ((h & 0xFF) / 255 - 0.5) * baseR * 2;
     const cy = f.y + (((h >> 8) & 0xFF) / 255 - 0.5) * baseR * 1.5;
-    const cr = 1 + ((h >> 16) & 0x3) * 0.5;
-    ctx.fillStyle = color;
-    ctx.beginPath(); ctx.arc(cx, cy, cr, 0, 6.28); ctx.fill();
+    const sz = 1 + ((h >> 16) & 0x1);
+    ctx.fillRect(Math.round(cx), Math.round(cy), sz, sz);
   }
 }
 
@@ -166,42 +166,29 @@ function _drawFoodCluster(ctx, f, color) {
 AF.renderer.brood = function(ctx, brood) {
   if (!brood) return;
   for (const b of brood) {
-    const x = b.x, y = b.y;
+    const bx = Math.round(b.x), by = Math.round(b.y);
 
     if (b.stage === AF.BROOD.EGG) {
-      // Eggs: tiny white ovals
+      // Eggs: tiny white pixel cluster
       ctx.fillStyle = 'rgba(255,255,255,0.9)';
-      ctx.beginPath();
-      ctx.ellipse(x, y, 1.5, 2.2, 0, 0, 6.28);
-      ctx.fill();
+      ctx.fillRect(bx, by - 1, 2, 3);
     } else if (b.stage === AF.BROOD.LARVA) {
-      // Larvae: slightly larger, light gray, C-shaped
+      // Larvae: slightly larger, light gray block
       const fed = b.fed || 0;
-      const size = 2.0 + fed * 0.4;
+      const sz = 2 + fed;
       ctx.fillStyle = 'rgba(220,220,220,0.9)';
-      ctx.beginPath();
-      ctx.arc(x, y, size, 0, 6.28);
-      ctx.fill();
-      // Darker center
-      ctx.fillStyle = 'rgba(160,160,160,0.6)';
-      ctx.beginPath();
-      ctx.arc(x + 0.5, y - 0.3, size * 0.4, 0, 6.28);
-      ctx.fill();
+      ctx.fillRect(bx - 1, by - 1, sz, sz);
+      // Darker center pixel
+      ctx.fillStyle = 'rgba(140,140,140,0.6)';
+      ctx.fillRect(bx, by, 1, 1);
     } else if (b.stage === AF.BROOD.PUPA) {
-      // Pupae: medium gray, cocoon-like
+      // Pupae: medium gray pixel capsule
       ctx.fillStyle = 'rgba(180,180,180,0.9)';
-      ctx.beginPath();
-      ctx.ellipse(x, y, 2.2, 3.0, 0.2, 0, 6.28);
-      ctx.fill();
+      ctx.fillRect(bx - 1, by - 2, 3, 5);
       // Segmentation lines
-      ctx.strokeStyle = 'rgba(120,120,120,0.5)';
-      ctx.lineWidth = 0.5;
-      ctx.beginPath();
-      ctx.moveTo(x - 1.5, y - 0.5);
-      ctx.lineTo(x + 1.5, y - 0.5);
-      ctx.moveTo(x - 1.5, y + 0.8);
-      ctx.lineTo(x + 1.5, y + 0.8);
-      ctx.stroke();
+      ctx.fillStyle = 'rgba(120,120,120,0.5)';
+      ctx.fillRect(bx - 1, by - 1, 3, 1);
+      ctx.fillRect(bx - 1, by + 1, 3, 1);
     }
   }
 };
@@ -261,12 +248,14 @@ AF.renderer.particles = function(ctx, particles, terrainParticles) {
   for (const p of particles) {
     const a = Math.max(0, p.life / 35);
     ctx.fillStyle = `rgba(${p.r | 0},${p.g | 0},${p.b | 0},${a.toFixed(2)})`;
-    ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, 6.28); ctx.fill();
+    const sz = Math.ceil(p.size);
+    ctx.fillRect(Math.round(p.x), Math.round(p.y), sz, sz);
   }
   for (const p of terrainParticles) {
     const a = Math.max(0, p.life / 50);
     ctx.fillStyle = `rgba(${p.r | 0},${p.g | 0},${p.b | 0},${a.toFixed(2)})`;
-    ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, 6.28); ctx.fill();
+    const sz = Math.ceil(p.size);
+    ctx.fillRect(Math.round(p.x), Math.round(p.y), sz, sz);
   }
 };
 
@@ -331,16 +320,17 @@ AF.renderer.getPosture = function(ant) {
 
 AF.renderer.ant = function(ctx, ant, hoveredAnt, particles) {
   const x = ant.x, y = ant.y + (ant.bodyBob || 0);
-  let s = ant.size * 1.4;
+  const s = ant.size * 1.4;
   const mov = Math.hypot(ant.vx, ant.vy) > 0.08;
   const posture = AF.renderer.getPosture(ant);
   const { SAND_R, SAND_G, SAND_B } = AF;
-  const col = '#1a1a1a';
+
+  // Pixel unit — each "ant pixel" maps to ~1.4 screen pixels
+  const p = s * 0.24;
 
   // Compute visual rotation from smoothed display angle
   let visualAngle = ant.displayAngle || 0;
   let facingRight = 1;
-  // If facing left half (|angle| > PI/2), flip horizontally and mirror the angle
   if (Math.abs(visualAngle) > Math.PI / 2) {
     facingRight = -1;
     visualAngle = visualAngle > 0 ? Math.PI - visualAngle : -(Math.PI + visualAngle);
@@ -352,98 +342,103 @@ AF.renderer.ant = function(ctx, ant, hoveredAnt, particles) {
   ctx.rotate(visualAngle);
   if (posture.bodyTilt) ctx.rotate(posture.bodyTilt);
 
-  // LEGS
-  ctx.strokeStyle = col;
-  ctx.lineWidth = s * 0.22; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-  for (let i = 0; i < 3; i++) {
-    const tripodOffset = (i === 1) ? Math.PI : 0;
-    const phase = (mov || posture.legSpeed > 0) ? Math.sin(ant.legT + tripodOffset) * posture.legSpeed : 0;
-    const attachX = -s * 0.3 + i * s * 0.65;
-    const attachY = s * 0.1;
-    const kneeX = attachX + phase * s * 0.2;
-    const kneeY = attachY + s * 0.55;
-    const footX = kneeX + (i - 1) * s * 0.15 + phase * s * 0.3;
-    const footY = attachY + s * 1.1 + Math.abs(phase) * s * 0.1;
-    ctx.beginPath(); ctx.moveTo(attachX, attachY); ctx.lineTo(kneeX, kneeY); ctx.lineTo(footX, footY); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(footX - s * 0.1, footY); ctx.lineTo(footX + s * 0.15, footY + s * 0.04); ctx.stroke();
+  const bk = '#1a1a1a';
+  const pp = p + 0.5; // pixel draw size (slight overlap prevents gaps)
+
+  // Helper: draw one ant-pixel at sprite grid coords
+  function dot(gx, gy, c) {
+    ctx.fillStyle = c || bk;
+    ctx.fillRect(gx * p, gy * p, pp, pp);
   }
 
-  // ABDOMEN
-  const abdX = -s * 0.9, abdY = -s * 0.05;
-  ctx.fillStyle = col;
-  ctx.beginPath(); ctx.ellipse(abdX, abdY, s * 0.95, s * 0.6 * (posture.abdomenPulse || 1), -0.1, 0, 6.28); ctx.fill();
+  // ── ABDOMEN (teardrop, leftmost) ──
+  dot(-5, 0);
+  dot(-4, -1); dot(-4, 0); dot(-4, 1);
+  dot(-3, -1); dot(-3, 0); dot(-3, 1);
+  dot(-2, 0);
+  // Breathing pulse: extra pixel
+  if ((posture.abdomenPulse || 1) > 1.03) dot(-5, -1);
 
-  // PETIOLE
-  ctx.beginPath(); ctx.ellipse(-s * 0.05, 0, s * 0.13, s * 0.1, 0, 0, 6.28); ctx.fill();
+  // ── PETIOLE ──
+  dot(-1, 0);
 
-  // THORAX
-  const thX = s * 0.3, thY = -s * 0.03;
-  ctx.beginPath(); ctx.ellipse(thX, thY, s * 0.4, s * 0.3, -0.15, 0, 6.28); ctx.fill();
+  // ── THORAX (legs attach here) ──
+  dot(0, -1); dot(0, 0);
+  dot(1, -1); dot(1, 0);
+  dot(2, 0);
 
-  // HEAD
-  const headDip = posture.headDip || 0;
-  const hdX = s * 0.85, hdY = s * 0.02 + headDip * s;
-  ctx.beginPath(); ctx.ellipse(hdX, hdY, s * 0.35, s * 0.3, 0.1, 0, 6.28); ctx.fill();
+  // ── HEAD ──
+  dot(3, -1); dot(3, 0);
+  dot(4, 0);
 
-  // Eye
-  ctx.fillStyle = '#fff';
-  ctx.beginPath(); ctx.arc(hdX + s * 0.14, hdY - s * 0.06, s * 0.06, 0, 6.28); ctx.fill();
+  // ── EYE (white pixel) ──
+  dot(4, -1, '#fff');
 
-  // MANDIBLES
-  ctx.strokeStyle = col; ctx.lineWidth = s * 0.18; ctx.lineCap = 'round';
-  const mO = posture.mandibleOpen + (mov ? Math.sin(ant.legT * 0.5) * 0.04 : 0);
-  ctx.beginPath(); ctx.moveTo(hdX + s * 0.25, hdY - s * 0.08); ctx.lineTo(hdX + s * 0.6, hdY - s * 0.2 - mO * s * 0.8); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(hdX + s * 0.25, hdY + s * 0.08); ctx.lineTo(hdX + s * 0.6, hdY + s * 0.2 + mO * s * 0.8); ctx.stroke();
+  // ── MANDIBLES ──
+  const mO = posture.mandibleOpen || 0;
+  if (mO > 0.15) {
+    dot(5, -1); dot(5, 1); // open
+  } else {
+    dot(5, 0); // closed
+  }
 
-  // Sand grain (gray to match sand)
+  // ── ANTENNAE (two, with bobbing) ──
+  const aT = ant.antT || 0;
+  const ab1 = Math.sin(aT) > 0.3 ? 0 : -1;
+  const ab2 = Math.sin(aT + 1.2) > 0.3 ? 0 : -1;
+  dot(4, -2);               // base
+  dot(5, -3 + ab1);         // upper tip
+  dot(5, -2 + ab2);         // lower tip
+
+  // ── LEGS (tripod gait animation) ──
+  // All 6 legs attach to thorax (x = -1 to 2)
+  const la = mov || posture.animateWhenStill;
+  if (la && Math.sin(ant.legT || 0) > 0) {
+    // Frame A: rear back, front forward
+    dot(-1, 1); dot(-2, 2); dot(-3, 3);   // rear pair
+    dot(1, 1);  dot(1, 2);  dot(1, 3);    // middle pair
+    dot(2, 1);  dot(3, 2);  dot(4, 3);    // front pair
+  } else if (la) {
+    // Frame B: rear forward, front back
+    dot(-1, 1); dot(0, 2);  dot(1, 3);    // rear pair
+    dot(1, 1);  dot(1, 2);  dot(1, 3);    // middle pair
+    dot(2, 1);  dot(1, 2);  dot(0, 3);    // front pair
+  } else {
+    // Static: legs straight down
+    dot(-1, 1); dot(-1, 2); dot(-1, 3);   // rear pair
+    dot(1, 1);  dot(1, 2);  dot(1, 3);    // middle pair
+    dot(2, 1);  dot(2, 2);  dot(2, 3);    // front pair
+  }
+
+  // ── CARRIED SAND ──
   if (ant.carryingSand > 0) {
-    const grainSize = s * (0.18 + ant.carryingSand * 0.04);
-    ctx.fillStyle = `rgb(${SAND_R},${SAND_G},${SAND_B})`;
-    ctx.beginPath(); ctx.arc(hdX + s * 0.5, hdY, grainSize, 0, 6.28); ctx.fill();
+    const sc = `rgb(${SAND_R},${SAND_G},${SAND_B})`;
+    dot(5, -1, sc); dot(6, 0, sc);
+    if (ant.carryingSand > 3) dot(6, -1, sc);
   }
 
-  // ANTENNAE (two for realism)
-  ctx.strokeStyle = col; ctx.lineWidth = s * 0.12;
-  const antBob = Math.sin(ant.antT) * 0.12;
-  // Upper antenna
-  ctx.beginPath();
-  ctx.moveTo(hdX + s * 0.15, hdY - s * 0.2);
-  ctx.quadraticCurveTo(hdX + s * 0.35, hdY - s * 0.65 + antBob * s, hdX + s * 0.65, hdY - s * 0.75 + antBob * s);
-  ctx.stroke();
-  ctx.fillStyle = col;
-  ctx.beginPath(); ctx.arc(hdX + s * 0.65, hdY - s * 0.75 + antBob * s, s * 0.06, 0, 6.28); ctx.fill();
-  // Lower antenna (mirrored)
-  const antBob2 = Math.sin(ant.antT + 0.8) * 0.10;
-  ctx.beginPath();
-  ctx.moveTo(hdX + s * 0.15, hdY - s * 0.1);
-  ctx.quadraticCurveTo(hdX + s * 0.4, hdY - s * 0.5 + antBob2 * s, hdX + s * 0.7, hdY - s * 0.55 + antBob2 * s);
-  ctx.stroke();
-  ctx.beginPath(); ctx.arc(hdX + s * 0.7, hdY - s * 0.55 + antBob2 * s, s * 0.05, 0, 6.28); ctx.fill();
-
-  // Food (foraging or nurse carrying)
+  // ── CARRIED FOOD ──
   if (ant.carrying || ant.carryingFood > 0) {
-    ctx.fillStyle = '#555';
-    ctx.beginPath(); ctx.arc(hdX + s * 0.45, hdY - s * 0.05, s * 0.25, 0, 6.28); ctx.fill();
+    dot(5, -1, '#555'); dot(6, 0, '#555');
   }
 
-  // Queen marker
+  // ── QUEEN MARKER (white crown pixels) ──
   if (ant.isQueen) {
-    ctx.fillStyle = 'rgba(255,255,255,0.7)';
-    ctx.beginPath(); ctx.arc(thX, thY - s * 0.5, s * 0.18, 0, 6.28); ctx.fill();
+    dot(0, -2, '#fff'); dot(1, -2, '#fff');
   }
 
-  // Hover highlight
+  // ── HOVER HIGHLIGHT ──
   if (hoveredAnt === ant) {
-    ctx.strokeStyle = 'rgba(0,0,0,0.3)'; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.ellipse(0, 0, s * 2.2, s * 1.5, 0, 0, 6.28); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,0.4)'; ctx.lineWidth = 1;
+    ctx.strokeRect(-6 * p, -4 * p, 13 * p, 8 * p);
   }
 
-  // Dig dust (gray particles)
+  // ── DIG DUST (pixel particles) ──
   if (posture.dustChance > 0 && Math.random() < posture.dustChance && mov && particles) {
     particles.push({
       x: ant.x + (facingRight * s * 1.5), y: ant.y + s * 0.3,
       vx: (Math.random() - 0.5) * 1.5 * facingRight, vy: Math.random() * -1.2 - 0.3,
-      life: 15 + Math.random() * 10, size: 0.8 + Math.random() * 0.8,
+      life: 15 + Math.random() * 10, size: 1,
       r: SAND_R, g: SAND_G, b: SAND_B
     });
   }
@@ -461,21 +456,21 @@ AF.renderer.fallingObjects = function(ctx, objects) {
     ctx.translate(f.x, f.y);
     ctx.rotate(f.rotation);
     if (f.type === 'ant') {
-      const s = 3.5;
+      // Pixel art tumbling ant
+      const px = 1.5;
       ctx.fillStyle = '#1a1a1a';
-      ctx.beginPath(); ctx.ellipse(-s * 0.9, 0, s * 0.9, s * 0.55, 0, 0, 6.28); ctx.fill();
-      ctx.beginPath(); ctx.ellipse(0, 0, s * 0.12, s * 0.1, 0, 0, 6.28); ctx.fill();
-      ctx.beginPath(); ctx.ellipse(s * 0.3, 0, s * 0.35, s * 0.28, 0, 0, 6.28); ctx.fill();
-      ctx.beginPath(); ctx.ellipse(s * 0.75, 0, s * 0.3, s * 0.25, 0, 0, 6.28); ctx.fill();
-      ctx.strokeStyle = '#1a1a1a'; ctx.lineWidth = s * 0.18;
-      for (let i = 0; i < 3; i++) {
-        const lx = -s * 0.3 + i * s * 0.5;
-        ctx.beginPath(); ctx.moveTo(lx, 0); ctx.lineTo(lx - s * 0.4, s * 0.8); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(lx, 0); ctx.lineTo(lx + s * 0.3, -s * 0.7); ctx.stroke();
-      }
+      const dots = [[-4,0],[-3,-1],[-3,0],[-3,1],[-2,0],[-1,0],[0,-1],[0,0],[1,-1],[1,0],[2,0],[3,-1],[3,0]];
+      for (const d of dots) ctx.fillRect(d[0] * px, d[1] * px, px + 0.5, px + 0.5);
+      // Eye
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(3 * px, -1 * px, px + 0.5, px + 0.5);
+      // Legs (splayed)
+      ctx.fillStyle = '#1a1a1a';
+      const legs = [[-2,1],[-3,2],[0,1],[0,2],[2,1],[3,2]];
+      for (const d of legs) ctx.fillRect(d[0] * px, d[1] * px, px + 0.5, px + 0.5);
     } else if (f.type === 'food') {
-      ctx.fillStyle = f.color || '#7a6a50';
-      ctx.beginPath(); ctx.arc(0, 0, 2.5, 0, 6.28); ctx.fill();
+      ctx.fillStyle = f.color || '#555';
+      ctx.fillRect(-1, -1, 3, 3);
     }
     ctx.restore();
   }
