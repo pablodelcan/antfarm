@@ -249,13 +249,13 @@ function _think(state, ant, s) {
             ant.digAngle = Math.PI * 0.5; // straight down
             AF.ant.setThought(ant, 'Deepening main shaft');
           } else if (goals && goals.phase === 'gallery') {
-            ant.digAngle = Math.PI * 0.5 + (Math.random() - 0.5) * 1.2;
+            ant.digAngle = Math.PI * 0.5 + (Math.random() - 0.5) * 0.6;
             AF.ant.setThought(ant, 'Branching new gallery');
           } else if (goals && goals.phase === 'chamber') {
-            ant.digAngle = Math.PI * 0.5 + (Math.random() - 0.5) * 0.8;
+            ant.digAngle = Math.PI * 0.5 + (Math.random() - 0.5) * 0.4;
             AF.ant.setThought(ant, 'Carving chamber space');
           } else {
-            ant.digAngle = Math.PI * 0.5 + (Math.random() - 0.5) * 0.6;
+            ant.digAngle = Math.PI * 0.5 + (Math.random() - 0.5) * 0.4;
             AF.ant.setThought(ant, 'Expanding tunnels');
           }
         } else {
@@ -284,7 +284,7 @@ function _think(state, ant, s) {
       // Detect overcrowding: if too many diggers nearby, branch off
       if (s.digNearby > B_SATURATION && Math.random() < 0.05) {
         const branchDir = Math.random() < 0.5 ? -1 : 1;
-        ant.digAngle += branchDir * (0.8 + Math.random() * 0.8);
+        ant.digAngle += branchDir * (0.3 + Math.random() * 0.3);
         AF.ant.setThought(ant, 'Area crowded, branching');
       }
       // Chamber creation: when deep enough and phase is 'chamber', dig wider
@@ -653,7 +653,7 @@ function _moveEnter(state, ant, s, spd) {
 
 function _moveDig(state, ant, s, spd) {
   const depthBelow = s.gy - AF.SURFACE;
-  const nearSurface = depthBelow < 20;
+  const nearSurface = depthBelow < 40;
   const goals = state.colonyGoals;
 
   // Natural heading perturbation (branching chance tunable by AI)
@@ -665,15 +665,15 @@ function _moveDig(state, ant, s, spd) {
 
   // Near surface: force straight down for clean shaft
   if (nearSurface) {
-    ant.digAngle += (Math.PI * 0.5 - ant.digAngle) * 0.25;
+    ant.digAngle += (Math.PI * 0.5 - ant.digAngle) * 0.5;
     if (state.entranceX > 0) {
       const targetX = state.entranceX * AF.CELL + AF.CELL / 2;
       const drift = Math.abs(ant.x - targetX);
-      if (drift > AF.CELL * 2) {
+      if (drift > AF.CELL * 1) {
         ant.x = targetX;
         ant.vx = 0;
       } else {
-        ant.vx += (targetX - ant.x) * 0.1;
+        ant.vx += (targetX - ant.x) * 0.2;
       }
     }
   }
@@ -700,7 +700,7 @@ function _moveDig(state, ant, s, spd) {
   }
 
   // Clamp dig angle (mostly downward)
-  ant.digAngle = AF.clamp(ant.digAngle, 0.2, 2.94);
+  ant.digAngle = AF.clamp(ant.digAngle, 0.6, 2.5);
   ant.heading += (ant.digAngle - ant.heading) * 0.15;
 
   ant.vx += Math.cos(ant.heading) * spd * 0.35;

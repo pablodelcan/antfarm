@@ -52,7 +52,7 @@ AF.ant.create = function(x, y, isQueen) {
     role: isQueen ? 'queen' : 'idle',
 
     // Visual (used by renderer)
-    size: isQueen ? 4.5 : (3.0 + Math.random() * 0.5),
+    size: isQueen ? 5.5 : (4.0 + Math.random() * 0.8),
     hue: Math.random() * 15,
     legT: Math.random() * Math.PI * 2,
     antT: Math.random() * Math.PI * 2,

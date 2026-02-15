@@ -126,8 +126,8 @@ AF.terrain._reinforce = function(state, x, y) {
     const nx = x + dx, ny = y + dy;
     if (nx < 0 || nx >= COLS || ny < 0 || ny >= ROWS) continue;
     const ni = ny * COLS + nx;
-    if (state.grid[ni] > 0 && state.grid[ni] < 3) {
-      state.grid[ni] = 3;
+    if (state.grid[ni] > 0 && state.grid[ni] < 4) {
+      state.grid[ni] = 4;
     }
   }
 };
@@ -138,7 +138,7 @@ AF.terrain.depositSand = function(state, gx) {
   const { COLS, ROWS, SURFACE } = AF;
 
   // Scatter deposit position near entrance (+/- a few cells)
-  let nx = gx + ((Math.random() * 5 - 2.5) | 0);
+  let nx = gx + ((Math.random() * 24 - 12) | 0);
   nx = Math.max(2, Math.min(COLS - 3, nx));
 
   // Find the topmost solid cell in this column near the surface
@@ -170,7 +170,7 @@ AF.terrain.depositSand = function(state, gx) {
 AF.terrain.gravity = function(state) {
   const { COLS, ROWS, SURFACE } = AF;
   const cellAt = AF.terrain.cellAt;
-  for (let y = ROWS - 2; y >= Math.max(0, SURFACE - 20); y--) {
+  for (let y = Math.min(ROWS - 2, SURFACE + 2); y >= Math.max(0, SURFACE - 20); y--) {
     for (let x = 0; x < COLS; x++) {
       const v = state.grid[y * COLS + x];
       if (!v || v > 2) continue;
