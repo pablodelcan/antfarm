@@ -67,6 +67,7 @@ AF.ant.create = function(x, y, isQueen) {
     legT: Math.random() * Math.PI * 2,
     antT: Math.random() * Math.PI * 2,
     bodyBob: 0,
+    displayAngle: 0,       // smoothed visual rotation (radians)
 
     // Identity
     name: AF.ANT_NAMES[nameIdx],

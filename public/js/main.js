@@ -349,7 +349,7 @@ function adminAction(action, value) {
     toast('Added 5 ants');
   } else if (action === 'dropFood') {
     AF.colony.dropFood(state);
-    const colors = ['#7a6a50', '#a09080', '#6a5a40'];
+    const colors = ['#555', '#777', '#444'];
     for (let i = 0; i < 6; i++) {
       fallingObjects.push({
         type: 'food',

@@ -88,10 +88,10 @@ AF.renderer.terrain = function(ctx, state) {
           d[i + 2] = Math.max(0, Math.min(255, b)) | 0;
           d[i + 3] = 255;
         } else {
-          // Tunnel — dark earthy gray
-          d[i]     = 90;
-          d[i + 1] = 85;
-          d[i + 2] = 80;
+          // Tunnel — near black for B&W palette
+          d[i]     = AF.TUNNEL_R;
+          d[i + 1] = AF.TUNNEL_G;
+          d[i + 2] = AF.TUNNEL_B;
           d[i + 3] = 255;
         }
       }
@@ -134,12 +134,12 @@ AF.renderer.glass = function(ctx) {
 AF.renderer.food = function(ctx, foods, foodStores) {
   // Surface food
   for (const f of foods) {
-    _drawFoodCluster(ctx, f, 'rgba(80,70,55,0.7)');
+    _drawFoodCluster(ctx, f, 'rgba(60,60,60,0.7)');
   }
-  // Underground food stores (slightly different color to distinguish)
+  // Underground food stores (slightly lighter to distinguish)
   if (foodStores) {
     for (const f of foodStores) {
-      _drawFoodCluster(ctx, f, 'rgba(120,90,40,0.8)');
+      _drawFoodCluster(ctx, f, 'rgba(90,90,90,0.8)');
     }
   }
 };
@@ -170,31 +170,31 @@ AF.renderer.brood = function(ctx, brood) {
 
     if (b.stage === AF.BROOD.EGG) {
       // Eggs: tiny white ovals
-      ctx.fillStyle = 'rgba(240,235,220,0.9)';
+      ctx.fillStyle = 'rgba(255,255,255,0.9)';
       ctx.beginPath();
       ctx.ellipse(x, y, 1.5, 2.2, 0, 0, 6.28);
       ctx.fill();
     } else if (b.stage === AF.BROOD.LARVA) {
-      // Larvae: slightly larger, cream-colored, C-shaped
+      // Larvae: slightly larger, light gray, C-shaped
       const fed = b.fed || 0;
       const size = 2.0 + fed * 0.4;
-      ctx.fillStyle = 'rgba(245,235,200,0.9)';
+      ctx.fillStyle = 'rgba(220,220,220,0.9)';
       ctx.beginPath();
       ctx.arc(x, y, size, 0, 6.28);
       ctx.fill();
       // Darker center
-      ctx.fillStyle = 'rgba(220,200,160,0.6)';
+      ctx.fillStyle = 'rgba(160,160,160,0.6)';
       ctx.beginPath();
       ctx.arc(x + 0.5, y - 0.3, size * 0.4, 0, 6.28);
       ctx.fill();
     } else if (b.stage === AF.BROOD.PUPA) {
-      // Pupae: darker, more defined shape, cocoon-like
-      ctx.fillStyle = 'rgba(200,185,150,0.9)';
+      // Pupae: medium gray, cocoon-like
+      ctx.fillStyle = 'rgba(180,180,180,0.9)';
       ctx.beginPath();
       ctx.ellipse(x, y, 2.2, 3.0, 0.2, 0, 6.28);
       ctx.fill();
       // Segmentation lines
-      ctx.strokeStyle = 'rgba(170,155,120,0.5)';
+      ctx.strokeStyle = 'rgba(120,120,120,0.5)';
       ctx.lineWidth = 0.5;
       ctx.beginPath();
       ctx.moveTo(x - 1.5, y - 0.5);
@@ -221,10 +221,10 @@ AF.renderer.chamberLabels = function(ctx, chambers) {
   };
 
   const COLORS = {
-    royal: 'rgba(200,170,50,0.35)',
-    brood: 'rgba(180,150,200,0.30)',
-    food: 'rgba(120,160,80,0.30)',
-    midden: 'rgba(140,120,100,0.25)',
+    royal: 'rgba(255,255,255,0.20)',
+    brood: 'rgba(200,200,200,0.18)',
+    food: 'rgba(170,170,170,0.18)',
+    midden: 'rgba(130,130,130,0.15)',
   };
 
   ctx.font = '7px sans-serif';
@@ -332,15 +332,24 @@ AF.renderer.getPosture = function(ant) {
 AF.renderer.ant = function(ctx, ant, hoveredAnt, particles) {
   const x = ant.x, y = ant.y + (ant.bodyBob || 0);
   let s = ant.size * 1.4;
-  const facingRight = ant.vx >= 0 ? 1 : -1;
   const mov = Math.hypot(ant.vx, ant.vy) > 0.08;
   const posture = AF.renderer.getPosture(ant);
   const { SAND_R, SAND_G, SAND_B } = AF;
   const col = '#1a1a1a';
 
+  // Compute visual rotation from smoothed display angle
+  let visualAngle = ant.displayAngle || 0;
+  let facingRight = 1;
+  // If facing left half (|angle| > PI/2), flip horizontally and mirror the angle
+  if (Math.abs(visualAngle) > Math.PI / 2) {
+    facingRight = -1;
+    visualAngle = visualAngle > 0 ? Math.PI - visualAngle : -(Math.PI + visualAngle);
+  }
+
   ctx.save();
   ctx.translate(x, y);
   ctx.scale(facingRight, 1);
+  ctx.rotate(visualAngle);
   if (posture.bodyTilt) ctx.rotate(posture.bodyTilt);
 
   // LEGS
@@ -413,14 +422,14 @@ AF.renderer.ant = function(ctx, ant, hoveredAnt, particles) {
 
   // Food (foraging or nurse carrying)
   if (ant.carrying || ant.carryingFood > 0) {
-    ctx.fillStyle = ant.carryingFood > 0 ? '#8a7a30' : '#5a8a30';
+    ctx.fillStyle = '#555';
     ctx.beginPath(); ctx.arc(hdX + s * 0.45, hdY - s * 0.05, s * 0.25, 0, 6.28); ctx.fill();
   }
 
   // Queen marker
   if (ant.isQueen) {
-    ctx.fillStyle = 'rgba(200,170,50,0.6)';
-    ctx.beginPath(); ctx.arc(thX, thY - s * 0.5, s * 0.15, 0, 6.28); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    ctx.beginPath(); ctx.arc(thX, thY - s * 0.5, s * 0.18, 0, 6.28); ctx.fill();
   }
 
   // Hover highlight

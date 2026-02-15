@@ -21,10 +21,10 @@ AF.SAND_R = 210;
 AF.SAND_G = 207;
 AF.SAND_B = 203;
 
-// Tunnel color — dark gray
-AF.TUNNEL_R = 90;
-AF.TUNNEL_G = 85;
-AF.TUNNEL_B = 80;
+// Tunnel color — dark (near black for B&W palette)
+AF.TUNNEL_R = 40;
+AF.TUNNEL_G = 40;
+AF.TUNNEL_B = 40;
 
 // Movement speeds (pixels per frame)
 AF.BASE_SPEED = 0.8;

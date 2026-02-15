@@ -132,13 +132,17 @@ AF.terrain._reinforce = function(state, x, y) {
   }
 };
 
-// ── Sand deposit (ant hauls sand to surface — builds mounds) ──
+// ── Sand deposit (ant hauls sand to surface — builds mounds beside entrance) ──
 
 AF.terrain.depositSand = function(state, gx) {
   const { COLS, ROWS, SURFACE } = AF;
+  const entranceX = state.entranceX || gx;
 
-  // Scatter deposit position near entrance (+/- a few cells)
-  let nx = gx + ((Math.random() * 24 - 12) | 0);
+  // Deposit to a random side, AWAY from the entrance so ants can enter/exit
+  // Clear zone: ±3 cells around entrance kept open
+  const side = Math.random() < 0.5 ? -1 : 1;
+  const offset = 4 + ((Math.random() * 14) | 0); // 4-18 cells from entrance
+  let nx = entranceX + side * offset;
   nx = Math.max(2, Math.min(COLS - 3, nx));
 
   // Find the topmost solid cell in this column near the surface

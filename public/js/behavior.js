@@ -743,11 +743,29 @@ function _act(state, ant, s) {
   }
 
   // Animation
-  const moving = Math.hypot(ant.vx, ant.vy) > 0.08;
+  const speed = Math.hypot(ant.vx, ant.vy);
+  const moving = speed > 0.08;
   if (moving) {
-    ant.legT += 0.22;
-    ant.antT += 0.07;
+    const speedFactor = Math.min(speed / 1.0, 2.5);
+    ant.legT += 0.18 * speedFactor;
+    ant.antT += 0.05 + 0.04 * speedFactor;
     ant.bodyBob = Math.sin(ant.legT * 0.4) * 0.3;
+
+    // Smooth visual angle toward movement direction
+    const moveAngle = Math.atan2(ant.vy, ant.vx);
+    let diff = moveAngle - ant.displayAngle;
+    // Normalize to [-PI, PI]
+    while (diff > Math.PI) diff -= 2 * Math.PI;
+    while (diff < -Math.PI) diff += 2 * Math.PI;
+    ant.displayAngle += diff * 0.12;
+  } else {
+    // When stopped, slowly flatten toward horizontal
+    let diff = -ant.displayAngle;
+    if (Math.abs(ant.displayAngle) > 0.05) {
+      if (ant.displayAngle > Math.PI / 2) diff = Math.PI - ant.displayAngle;
+      else if (ant.displayAngle < -Math.PI / 2) diff = -Math.PI - ant.displayAngle;
+      ant.displayAngle += diff * 0.03;
+    }
   }
 }
 
@@ -1325,6 +1343,17 @@ function _queenBehavior(state, ant) {
   ant.legT += 0.08;
   ant.antT += 0.04;
   ant.bodyBob = Math.sin(ant.legT * 0.3) * 0.2;
+  // Smooth queen display angle
+  const qSpeed = Math.hypot(ant.vx, ant.vy);
+  if (qSpeed > 0.05) {
+    const qAngle = Math.atan2(ant.vy, ant.vx);
+    let qDiff = qAngle - ant.displayAngle;
+    while (qDiff > Math.PI) qDiff -= 2 * Math.PI;
+    while (qDiff < -Math.PI) qDiff += 2 * Math.PI;
+    ant.displayAngle += qDiff * 0.08;
+  } else {
+    ant.displayAngle *= 0.95;
+  }
   ant.state = AF.ST.IDLE;
   ant.role = 'queen';
 }
