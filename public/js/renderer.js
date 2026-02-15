@@ -47,11 +47,15 @@ AF.renderer.terrain = function(ctx, state) {
     const depthRange = H - SURFACE_PX;
     const pixelHash = AF.terrain.pixelHash;
 
-    // Sky — clean white
+    // Sky — adapts to light/dark theme
+    const isLight = document.body.classList.contains('light');
+    const skyR = isLight ? 232 : 255;
+    const skyG = isLight ? 229 : 255;
+    const skyB = isLight ? 224 : 255;
     for (let y = 0; y < SURFACE_PX; y++) {
       for (let x = 0; x < W; x++) {
         const i = (y * W + x) * 4;
-        d[i] = 255; d[i + 1] = 255; d[i + 2] = 255; d[i + 3] = 255;
+        d[i] = skyR; d[i + 1] = skyG; d[i + 2] = skyB; d[i + 3] = 255;
       }
     }
 
@@ -232,9 +236,9 @@ AF.renderer.chamberLabels = function(ctx, chambers) {
   };
 
   const COLORS = {
-    royal: 'rgba(255,255,255,0.20)',
-    brood: 'rgba(200,200,200,0.18)',
-    food: 'rgba(170,170,170,0.18)',
+    royal: 'rgba(255,220,150,0.22)',
+    brood: 'rgba(200,220,255,0.18)',
+    food: 'rgba(180,255,180,0.18)',
     midden: 'rgba(130,130,130,0.15)',
   };
 
@@ -259,7 +263,7 @@ AF.renderer.chamberLabels = function(ctx, chambers) {
 
     // Small label
     ctx.fillStyle = color.replace(/[\d.]+\)$/, '0.6)');
-    const label = c.type === 'royal' ? 'Q' : c.type === 'brood' ? 'N' : c.type === 'food' ? 'F' : 'W';
+    const label = c.type === 'royal' ? '\u265B' : c.type === 'brood' ? 'N' : c.type === 'food' ? 'F' : 'W';
     ctx.fillText(label, c.x, c.y - r * 0.5 - 2);
   }
 };

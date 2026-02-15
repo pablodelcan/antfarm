@@ -906,29 +906,29 @@ function _moveEnter(state, ant, s, spd) {
 
   if (s.atSurface) {
     const dx = targetPx - ant.x;
-    if (Math.abs(dx) > AF.CELL) {
+    if (Math.abs(dx) > AF.CELL * 2) {
       ant.vx += Math.sign(dx) * spd * 0.4;
       ant.heading = dx > 0 ? 0 : Math.PI;
     } else {
-      // Snap to entrance column and dig straight down — keeps shaft narrow
-      ant.x = targetPx;
-      ant.vx = 0;
+      // Soft attraction toward entrance — allows 2-3 cell width
+      ant.vx += (targetPx - ant.x) * 0.15;
       ant.vy += spd * 0.6;
       ant.heading = Math.PI * 0.5;
       if (ant.digCD <= 0) {
-        // Dig ONLY at entranceX column — single cell wide shaft
-        const dug1 = AF.terrain.dig(state, entranceX, s.gy + 1);
+        // Dig at ant's grid column (near entranceX) — allows natural 2-3 cell width
+        const dgx = Math.abs(s.gx - entranceX) <= 1 ? s.gx : entranceX;
+        const dug1 = AF.terrain.dig(state, dgx, s.gy + 1);
         if (dug1) ant.carryingSand = Math.min(ant.carryingSand + 1, ant.maxSandCarry);
         ant.digCD = B_DIG_CD_BASE;
       }
     }
   } else {
-    // Underground in the entrance shaft — stay aligned to entranceX
-    ant.x = targetPx;
-    ant.vx = 0;
+    // Underground in the entrance shaft — soft attraction, not hard snap
+    ant.vx += (targetPx - ant.x) * 0.12;
     ant.vy += spd * 0.6;
     if (ant.digCD <= 0) {
-      const dug1 = AF.terrain.dig(state, entranceX, s.gy + 1);
+      const dgx = Math.abs(s.gx - entranceX) <= 1 ? s.gx : entranceX;
+      const dug1 = AF.terrain.dig(state, dgx, s.gy + 1);
       if (dug1) ant.carryingSand = Math.min(ant.carryingSand + 1, ant.maxSandCarry);
       ant.digCD = B_DIG_CD_BASE;
     }
@@ -940,12 +940,17 @@ function _moveEnter(state, ant, s, spd) {
 
 function _moveDig(state, ant, s, spd) {
   const depthBelow = s.gy - AF.SURFACE;
-  const inShaft = depthBelow < 60;  // wider zone for clean shaft
+  const inShaft = depthBelow < 15;  // shaft zone is just the top entrance area
   const goals = state.colonyGoals;
 
   // Natural heading perturbation (branching chance tunable by AI)
-  // Suppress branching entirely in the shaft zone to keep it clean
-  if (!inShaft) {
+  // Reduced branching in shaft zone, normal branching below
+  if (inShaft) {
+    // In shaft: very mild random wobble — produces 2-3 cell natural width
+    if (Math.random() < 0.01) {
+      ant.digAngle += (Math.random() - 0.5) * 0.2;
+    }
+  } else {
     const branchChance = (state.tuning && state.tuning.branchingChance) || 0.15;
     const effectiveBranch = B_BRANCH_CHANCE * (1 + branchChance);
     if (Math.random() < effectiveBranch) {
@@ -953,18 +958,17 @@ function _moveDig(state, ant, s, spd) {
     }
   }
 
-  // In shaft zone: force straight down at entranceX for clean, narrow shaft
+  // In shaft zone: attract toward entranceX but allow natural 2-3 cell width
   if (inShaft && state.entranceX > 0) {
-    ant.digAngle = Math.PI * 0.5; // strictly downward
+    ant.digAngle = Math.PI * 0.5; // bias downward
     const targetX = state.entranceX * AF.CELL + AF.CELL / 2;
-    ant.x = targetX;
-    ant.vx = 0;
+    // Soft attraction — NOT hard snap. Ants naturally spread 1 cell either side
+    ant.vx += (targetX - ant.x) * 0.1;
   }
 
-  // Chamber digging: only in chamber phase, deep enough, limited widening
-  // Dig 1 cell left OR right (not both sides at once), less frequently
-  if (goals && goals.phase === 'chamber' && depthBelow > 60) {
-    if (ant.digCount > 8 && ant.digCount % 10 === 0) {
+  // Chamber digging: dig 1 cell left OR right when in chamber phase
+  if (goals && goals.phase === 'chamber' && depthBelow > 20) {
+    if (ant.digCount > 6 && ant.digCount % 8 === 0) {
       const dx = Math.random() < 0.5 ? -1 : 1;
       const cx = s.gx + dx;
       if (AF.terrain.isSolid(state, cx, s.gy) && ant.carryingSand < ant.maxSandCarry) {
@@ -987,28 +991,32 @@ function _moveDig(state, ant, s, spd) {
   ant.vx += Math.cos(ant.heading) * spd * 0.35;
   ant.vy += Math.sin(ant.heading) * spd * 0.35;
 
-  // Dig ahead — ALWAYS pick up sand (no vanishing!)
+  // Dig ahead — one cell at a time, cooldown-gated
   if (ant.digCD <= 0 && ant.carryingSand < ant.maxSandCarry) {
-    // In shaft zone, dig strictly at entranceX column
-    const dgx = inShaft ? state.entranceX : s.gx + Math.round(Math.cos(ant.heading) * 1.5);
-    const dgy = s.gy + Math.round(Math.sin(ant.heading) * 1.5);
+    let dgx = s.gx + Math.round(Math.cos(ant.heading) * 1.5);
+    let dgy = s.gy + Math.round(Math.sin(ant.heading) * 1.5);
+
+    // In shaft zone, constrain digging to within 1 cell of entranceX (2-3 cell width)
+    if (inShaft && state.entranceX > 0) {
+      dgx = AF.clamp(dgx, state.entranceX - 1, state.entranceX + 1);
+    }
+
+    // If embedded in solid terrain, dig current cell to free ourselves
+    if (AF.terrain.isSolid(state, s.gx, s.gy)) {
+      dgx = s.gx;
+      dgy = s.gy;
+    }
+
     if (AF.terrain.isSolid(state, dgx, dgy)) {
       const dug = AF.terrain.dig(state, dgx, dgy);
       if (dug) {
         ant.carryingSand++;
         ant.digCount++;
-        ant.digCD = B_DIG_CD_BASE + (Math.random() * 4) | 0;
+        ant.digCD = B_DIG_CD_BASE + (Math.random() * 3) | 0;
         ant.stuck = 0;
         ant.energy -= 0.2; // digging is hard work
       }
     }
-    // Dig current cell if stuck
-    if (AF.terrain.isSolid(state, s.gx, s.gy)) {
-      const dug = AF.terrain.dig(state, s.gx, s.gy);
-      if (dug) ant.carryingSand = Math.min(ant.carryingSand + 1, ant.maxSandCarry);
-    }
-    // No perpendicular widening — tunnels stay 1 cell wide like real ant tunnels
-    // Chambers handle widening separately
   }
 
   // Don't dig above surface
@@ -1040,10 +1048,16 @@ function _moveUp(state, ant, s, spd) {
   }
 
   if (!foundOpen && ant.digCD <= 0) {
-    // Only dig straight up — no sideways widening
+    // Dig upward first; if blocked above, try one cell to the side
     if (AF.terrain.isSolid(state, s.gx, s.gy - 1)) {
       AF.terrain.dig(state, s.gx, s.gy - 1);
       ant.digCD = B_DIG_CD_BASE;
+    } else {
+      const side = Math.random() < 0.5 ? -1 : 1;
+      if (AF.terrain.isSolid(state, s.gx + side, s.gy)) {
+        AF.terrain.dig(state, s.gx + side, s.gy);
+        ant.digCD = B_DIG_CD_BASE;
+      }
     }
   }
 
@@ -1377,10 +1391,11 @@ function _queenBehavior(state, ant) {
       }
     }
   } else if (state.queenUnderground) {
-    // Queen is underground — stay in royal chamber area
+    // Queen is underground — find or carve royal chamber
     const royal = AF.colony.findChamber(state, AF.CHAMBER_TYPE.ROYAL);
+
     if (royal) {
-      // Gently drift toward royal chamber center
+      // Royal chamber exists — stay in it and tend eggs
       const dx = royal.x - ant.x;
       const dy = royal.y - ant.y;
       const dist = Math.hypot(dx, dy);
@@ -1388,20 +1403,61 @@ function _queenBehavior(state, ant) {
         ant.vx += (dx / dist) * 0.15;
         ant.vy += (dy / dist) * 0.15;
       }
-    }
 
-    // Gentle movement within chamber
-    ant.meanderPhase += 0.015;
-    ant.vx += Math.sin(ant.meanderPhase) * 0.03;
-    ant.vy += Math.cos(ant.meanderPhase * 0.7) * 0.02;
+      // Gentle meandering within chamber
+      ant.meanderPhase += 0.015;
+      ant.vx += Math.sin(ant.meanderPhase) * 0.03;
+      ant.vy += Math.cos(ant.meanderPhase * 0.7) * 0.02;
+
+      // Periodic egg-laying thought
+      if (ant.age % 600 === 0 && (state.brood || []).length > 0) {
+        AF.ant.setThought(ant, 'Tending to my eggs');
+      }
+    } else {
+      // No royal chamber yet — queen digs her own founding chamber
+      // Real ant queens carve a claustral cell off the main shaft
+      if (!ant._chamberDigDir) {
+        // Pick a direction (left or right of current position)
+        ant._chamberDigDir = Math.random() < 0.5 ? -1 : 1;
+        ant._chamberDugCount = 0;
+        AF.ant.setThought(ant, 'Digging my royal chamber');
+      }
+
+      // Dig sideways to carve a small room (about 5 wide x 4 tall)
+      const targetSize = 20; // cells to excavate
+      if ((ant._chamberDugCount || 0) < targetSize) {
+        // Dig in the chosen direction, fanning out slightly
+        const qgx = (ant.x / AF.CELL) | 0;
+        const qgy = (ant.y / AF.CELL) | 0;
+
+        if (ant.digCD <= 0) {
+          // Dig in a small area to the side and slightly below
+          const offX = ant._chamberDigDir * (1 + ((ant._chamberDugCount || 0) % 3));
+          const offY = ((ant._chamberDugCount || 0) % 4) - 1;
+          const dgx = qgx + offX;
+          const dgy = qgy + offY;
+
+          if (dgx > 0 && dgx < AF.COLS - 1 && dgy > AF.SURFACE && dgy < AF.ROWS - 1) {
+            if (AF.terrain.isSolid(state, dgx, dgy)) {
+              AF.terrain.dig(state, dgx, dgy);
+              ant._chamberDugCount = (ant._chamberDugCount || 0) + 1;
+              ant.digCD = 3;
+            }
+          }
+        }
+
+        // Move gently in the dig direction
+        ant.vx += ant._chamberDigDir * 0.08;
+      } else {
+        // Chamber carved — settle in
+        AF.ant.setThought(ant, 'Establishing royal chamber');
+        ant.meanderPhase += 0.015;
+        ant.vx += Math.sin(ant.meanderPhase) * 0.03;
+      }
+    }
 
     // Gravity
     if (!s.below) ant.vy += 0.12;
-
-    // Periodic egg-laying thought
-    if (ant.age % 600 === 0 && (state.brood || []).length > 0) {
-      AF.ant.setThought(ant, 'Tending to my eggs');
-    }
   } else {
     // Surface behavior (early colony, before shaft is ready)
     if (state.entranceX > 0) {

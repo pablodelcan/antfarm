@@ -213,6 +213,51 @@
   }
   .admin-panel button:hover { background: #555; color: #fff; }
 
+  /* ── Theme toggle button ── */
+  .bar-top .theme-btn {
+    cursor: pointer; color: rgba(255,255,255,0.35); font-size: 0.72rem;
+    width: 16px; height: 16px; display: flex;
+    align-items: center; justify-content: center;
+    transition: all 0.2s; background: none; border: none;
+  }
+  .bar-top .theme-btn:hover { color: #fff; }
+
+  /* ── Light mode ── */
+  body.light .bar-top { background: #f5f2ee; }
+  body.light .bar-top .title { color: #333; }
+  body.light .bar-top .stat-label { color: rgba(0,0,0,0.4); }
+  body.light .bar-top .stat-val { color: rgba(0,0,0,0.8); }
+  body.light .bar-top .help-btn { color: rgba(0,0,0,0.35); border-color: rgba(0,0,0,0.2); }
+  body.light .bar-top .help-btn:hover { color: #000; border-color: rgba(0,0,0,0.6); }
+  body.light .bar-top .theme-btn { color: rgba(0,0,0,0.35); }
+  body.light .bar-top .theme-btn:hover { color: #000; }
+  body.light .bar-top .ai-link { color: rgba(0,0,0,0.5); }
+  body.light .bar-top .ai-link:hover { color: rgba(0,0,0,0.9); }
+  body.light .bar-top .ai-dot { background: rgba(0,0,0,0.5); }
+  body.light .canvas-wrap { background: #e8e5e0; }
+  body.light .bar-bottom { background: #f5f2ee; }
+  body.light .bar-bottom .intel-focus { color: rgba(0,0,0,0.65); }
+  body.light .bar-bottom .intel-roles { color: rgba(0,0,0,0.35); }
+  body.light .bar-bottom .intel-right { color: rgba(0,0,0,0.3); }
+  body.light .ant-tooltip { background: rgba(255,255,255,0.92); border-color: rgba(0,0,0,0.1); color: rgba(0,0,0,0.7); }
+  body.light .ant-tooltip .tt-name { color: #000; }
+  body.light .ant-tooltip .tt-val { color: #000; }
+  body.light .toast { background: rgba(0,0,0,0.85); color: #fff; }
+  body.light .admin-panel { background: rgba(240,237,232,0.95); border-color: #ccc; }
+  body.light .admin-panel button { background: #ddd; color: #333; border-color: #bbb; }
+  body.light .admin-panel button:hover { background: #ccc; color: #000; }
+  body.light .ai-modal { background: #f5f2ee; border-color: #ccc; color: #333; }
+  body.light .ai-modal h2 { color: #1a1a1a; }
+  body.light .ai-modal p { color: rgba(0,0,0,0.65); }
+  body.light .ai-modal .ai-stat { color: rgba(0,0,0,0.5); border-color: rgba(0,0,0,0.08); }
+  body.light .ai-modal .ai-stat .val { color: rgba(0,0,0,0.85); }
+  body.light .ai-modal .close-btn { color: rgba(0,0,0,0.4); }
+  body.light .ai-modal .close-btn:hover { color: #000; }
+  body.light .ai-modal h3 { color: rgba(0,0,0,0.8); }
+  body.light .ai-modal ul { color: rgba(0,0,0,0.6); }
+  body.light .ai-modal ul li strong { color: rgba(0,0,0,0.85); }
+  body.light .ai-modal-overlay { background: rgba(0,0,0,0.3); }
+
   /* ── Hidden data elements ── */
   .hidden-data { display: none; }
 </style>
@@ -223,7 +268,7 @@
 <div class="intro">
   <h1>Antfarm</h1>
   <div class="sub">A living colony powered by Claude AI</div>
-  <div class="sub2">v23</div>
+  <div class="sub2">v24</div>
   <button onclick="begin()">Enter</button>
 </div>
 
@@ -245,6 +290,7 @@
         <span class="ai-dot"></span>
         <span>Claude AI</span>
       </div>
+      <button class="theme-btn" id="themeToggle" onclick="toggleTheme()" title="Toggle light/dark mode">&#9788;</button>
       <div class="help-btn" onclick="showHelpModal()">?</div>
     </div>
   </div>
@@ -348,15 +394,15 @@
 </div>
 
 <!-- Scripts -->
-<script src="/js/constants.js?v=26"></script>
-<script src="/js/terrain.js?v=26"></script>
-<script src="/js/pheromones.js?v=26"></script>
-<script src="/js/ant.js?v=26"></script>
-<script src="/js/behavior.js?v=26"></script>
-<script src="/js/colony.js?v=26"></script>
-<script src="/js/renderer.js?v=26"></script>
-<script src="/js/network.js?v=26"></script>
-<script src="/js/main.js?v=26"></script>
+<script src="/js/constants.js?v=27"></script>
+<script src="/js/terrain.js?v=27"></script>
+<script src="/js/pheromones.js?v=27"></script>
+<script src="/js/ant.js?v=27"></script>
+<script src="/js/behavior.js?v=27"></script>
+<script src="/js/colony.js?v=27"></script>
+<script src="/js/renderer.js?v=27"></script>
+<script src="/js/network.js?v=27"></script>
+<script src="/js/main.js?v=27"></script>
 
 </body>
 </html>

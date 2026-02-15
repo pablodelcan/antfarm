@@ -531,3 +531,31 @@ function showHelpModal() {
 function hideHelpModal(event) {
   document.getElementById('helpModal').classList.remove('show');
 }
+
+// ═══════════════════════════════════════════════════════════════════
+//  THEME TOGGLE — light/dark mode
+// ═══════════════════════════════════════════════════════════════════
+
+function toggleTheme() {
+  const body = document.body;
+  const isLight = body.classList.toggle('light');
+  const btn = document.getElementById('themeToggle');
+  // Sun for dark mode (switch to light), moon for light mode (switch to dark)
+  btn.innerHTML = isLight ? '&#9790;' : '&#9788;';
+  // Force terrain redraw so sky color updates
+  if (state) state.terrainDirty = true;
+  // Persist preference
+  try { localStorage.setItem('antfarm-theme', isLight ? 'light' : 'dark'); } catch(e) {}
+}
+
+// Restore saved theme preference on load
+(function() {
+  try {
+    const saved = localStorage.getItem('antfarm-theme');
+    if (saved === 'light') {
+      document.body.classList.add('light');
+      var btn = document.getElementById('themeToggle');
+      if (btn) btn.innerHTML = '&#9790;';
+    }
+  } catch(e) {}
+})();
