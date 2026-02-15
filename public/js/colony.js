@@ -111,6 +111,11 @@ AF.colony.tick = function(state) {
     AF.terrain.gravity(state);
   }
 
+  // Keep entrance clear of drifted sand (every 8 frames)
+  if (state.frame % 8 === 0) {
+    AF.terrain.clearEntrance(state);
+  }
+
   // Update all ants (including maturity aging)
   for (let i = state.ants.length - 1; i >= 0; i--) {
     const ant = state.ants[i];

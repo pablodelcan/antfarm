@@ -132,40 +132,77 @@ AF.terrain._reinforce = function(state, x, y) {
   }
 };
 
-// ── Sand deposit (ant hauls sand to surface — builds mounds beside entrance) ──
+// ── Sand deposit (ant hauls sand to surface — builds crater mound beside entrance) ──
+// Real ants create a volcano/crater shape: mounds rise on both sides of the
+// entrance, with the hole itself kept clear at the center. Deposits are
+// concentrated near the entrance (but not ON it), forming a natural cone.
+
+AF.terrain.ENTRANCE_CLEAR_RADIUS = 3; // cells on each side of entrance kept open
 
 AF.terrain.depositSand = function(state, gx) {
   const { COLS, ROWS, SURFACE } = AF;
   const entranceX = state.entranceX || gx;
+  const clearR = AF.terrain.ENTRANCE_CLEAR_RADIUS;
 
-  // Deposit to a random side, AWAY from the entrance so ants can enter/exit
-  // Clear zone: ±3 cells around entrance kept open
+  // Pick a random side (left or right of entrance)
   const side = Math.random() < 0.5 ? -1 : 1;
-  const offset = 4 + ((Math.random() * 14) | 0); // 4-18 cells from entrance
+
+  // Crater/volcano distribution: most sand deposited close to the entrance
+  // (just outside the clear zone), forming a natural mound that slopes away.
+  // Use an exponential-ish distribution: offset = clearR+1 to clearR+18,
+  // weighted toward the near side.
+  const r = Math.random();
+  const offset = clearR + 1 + Math.floor(r * r * 16); // quadratic bias toward near
   let nx = entranceX + side * offset;
   nx = Math.max(2, Math.min(COLS - 3, nx));
 
+  // Safety: never deposit in the entrance clear zone
+  if (Math.abs(nx - entranceX) <= clearR) return;
+
   // Find the topmost solid cell in this column near the surface
-  // Scan from well above surface down to find where to stack
   let depositY = -1;
   for (let y = Math.max(0, SURFACE - 20); y < Math.min(ROWS, SURFACE + 3); y++) {
     if (state.grid[y * COLS + nx] > 0) {
-      depositY = y - 1; // place above the first solid cell
+      depositY = y - 1;
       break;
     }
   }
 
-  // If no solid found (empty column), place at surface level
   if (depositY < 0) depositY = SURFACE - 1;
 
-  // Don't build mounds too tall (max ~15 cells above ground)
+  // Don't build mounds too tall
   if (depositY < SURFACE - 15) return;
 
-  // Deposit the sand grain
   if (depositY >= 0 && depositY < ROWS && !state.grid[depositY * COLS + nx]) {
-    state.grid[depositY * COLS + nx] = 1; // loose sand (can slide with gravity)
+    state.grid[depositY * COLS + nx] = 1;
     state.terrainDirty = true;
   }
+};
+
+// ── Entrance clearing — keep the entrance shaft open ──
+// Runs periodically to remove any loose sand that drifted into the entrance zone
+// (from gravity sliding). Real ants actively re-excavate their entrance.
+
+AF.terrain.clearEntrance = function(state) {
+  const { COLS, ROWS, SURFACE } = AF;
+  const entranceX = state.entranceX;
+  if (!entranceX || entranceX < 0) return;
+
+  const clearR = AF.terrain.ENTRANCE_CLEAR_RADIUS;
+  let changed = false;
+
+  // Clear loose sand (hardness 1-2) above and at surface level in the entrance zone
+  for (let x = entranceX - clearR; x <= entranceX + clearR; x++) {
+    if (x < 0 || x >= COLS) continue;
+    for (let y = Math.max(0, SURFACE - 20); y < SURFACE; y++) {
+      const i = y * COLS + x;
+      if (state.grid[i] > 0 && state.grid[i] <= 2) {
+        state.grid[i] = 0;
+        changed = true;
+      }
+    }
+  }
+  if (changed) state.terrainDirty = true;
 };
 
 // ── Gravity — loose sand (hardness 1-2) falls ──
@@ -174,11 +211,30 @@ AF.terrain.depositSand = function(state, gx) {
 AF.terrain.gravity = function(state) {
   const { COLS, ROWS, SURFACE } = AF;
   const cellAt = AF.terrain.cellAt;
+  const entranceX = state.entranceX;
+  const clearR = AF.terrain.ENTRANCE_CLEAR_RADIUS;
+
+  // Helper: is target cell in the entrance clear zone (above surface)?
+  function inClearZone(tx, ty) {
+    if (entranceX <= 0) return false;
+    return ty < SURFACE && Math.abs(tx - entranceX) <= clearR;
+  }
+
   for (let y = Math.min(ROWS - 2, SURFACE + 2); y >= Math.max(0, SURFACE - 20); y--) {
     for (let x = 0; x < COLS; x++) {
       const v = state.grid[y * COLS + x];
       if (!v || v > 2) continue;
+
+      // If this sand grain is already in the clear zone, remove it (entrance clearing)
+      if (inClearZone(x, y)) {
+        state.grid[y * COLS + x] = 0;
+        state.terrainDirty = true;
+        continue;
+      }
+
       if (!cellAt(state, x, y + 1)) {
+        // Don't let sand fall into the entrance clear zone
+        if (inClearZone(x, y + 1)) continue;
         state.grid[(y + 1) * COLS + x] = v;
         state.grid[y * COLS + x] = 0;
         state.terrainDirty = true;
@@ -186,15 +242,22 @@ AF.terrain.gravity = function(state) {
         const cl = !cellAt(state, x - 1, y + 1) && !cellAt(state, x - 1, y);
         const cr = !cellAt(state, x + 1, y + 1) && !cellAt(state, x + 1, y);
         if (cl && cr) {
-          const d = Math.random() < 0.5 ? -1 : 1;
+          // Both sides open — pick the one NOT in the clear zone, or random
+          const lClear = inClearZone(x - 1, y + 1);
+          const rClear = inClearZone(x + 1, y + 1);
+          let d;
+          if (lClear && rClear) continue; // both sides in zone, don't slide
+          else if (lClear) d = 1;
+          else if (rClear) d = -1;
+          else d = Math.random() < 0.5 ? -1 : 1;
           state.grid[(y + 1) * COLS + (x + d)] = v;
           state.grid[y * COLS + x] = 0;
           state.terrainDirty = true;
-        } else if (cl) {
+        } else if (cl && !inClearZone(x - 1, y + 1)) {
           state.grid[(y + 1) * COLS + (x - 1)] = v;
           state.grid[y * COLS + x] = 0;
           state.terrainDirty = true;
-        } else if (cr) {
+        } else if (cr && !inClearZone(x + 1, y + 1)) {
           state.grid[(y + 1) * COLS + (x + 1)] = v;
           state.grid[y * COLS + x] = 0;
           state.terrainDirty = true;
