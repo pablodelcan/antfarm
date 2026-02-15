@@ -35,6 +35,7 @@ const GOAL_WEIGHTS = {
   CHAMBER: { minDepth: 30, maxDepth: 100, priority: 4 },
   FORAGE:  { priority: 3 },
   EXPLORE: { priority: 2 },
+  NURSE:   { priority: 5 },
 };
 
 // ── Colony intelligence: assess and update goals ──
@@ -103,6 +104,18 @@ AF.behavior.updateColonyGoals = function(state) {
 
   // Override if food critical
   if (g.needsFood) state.digPriority = Math.min(state.digPriority, 4);
+
+  // Track brood needs
+  const brood = state.brood || [];
+  g.broodCount = brood.length;
+  g.hungryLarvae = brood.filter(b => b.stage === AF.BROOD.LARVA && b.fed < AF.LARVA_FEEDINGS_NEEDED).length;
+  g.needsNurses = g.hungryLarvae > 0 || g.broodCount > 0;
+
+  // Track queen underground status
+  const queen = state.ants.find(a => a.isQueen);
+  if (queen) {
+    state.queenUnderground = AF.ant.underground(queen);
+  }
 };
 
 // ── Main update: sense → think → act for one ant ──
@@ -355,14 +368,60 @@ function _think(state, ant, s) {
       }
       break;
 
-    // ── CARRY: bringing food to colony ──
+    // ── CARRY: bringing food to colony (surface or underground storage) ──
     case ST.CARRY:
-      if (s.atSurface) {
-        ant.carrying = false;
-        ant.energy = Math.min(ant.energy + 200, 1100);
-        _changeState(ant, ST.IDLE);
-        AF.ant.setThought(ant, 'Food delivered to colony');
-        return;
+      // Try to deposit food in underground food chamber if available
+      {
+        const foodChamber = AF.colony.findChamber(state, AF.CHAMBER_TYPE.FOOD);
+        if (foodChamber && s.underground) {
+          // If near food chamber, deposit food there
+          const distToStore = Math.hypot(foodChamber.x - ant.x, foodChamber.y - ant.y);
+          if (distToStore < AF.CELL * 6) {
+            ant.carrying = false;
+            ant.energy = Math.min(ant.energy + 150, 1100);
+            // Add to food stores
+            if (!state.foodStores) state.foodStores = [];
+            const existing = state.foodStores.find(f =>
+              Math.hypot(f.x - foodChamber.x, f.y - foodChamber.y) < AF.CELL * 4
+            );
+            if (existing) {
+              existing.amount += 1;
+            } else {
+              state.foodStores.push({
+                x: foodChamber.x + (Math.random() - 0.5) * 10,
+                y: foodChamber.y + (Math.random() - 0.5) * 8,
+                amount: 1,
+              });
+            }
+            _changeState(ant, ST.IDLE);
+            AF.ant.setThought(ant, 'Food stored in granary');
+            return;
+          }
+          // Navigate toward food chamber
+          ant._targetChamber = foodChamber;
+        } else if (ant.stateTimer > 500) {
+          // Timeout: drop food and go idle
+          ant.carrying = false;
+          ant._targetChamber = null;
+          _changeState(ant, ST.IDLE);
+          AF.ant.setThought(ant, 'Gave up carrying food');
+          return;
+        } else if (s.atSurface) {
+          // No food chamber or on surface — deposit on surface as before
+          ant.carrying = false;
+          ant.energy = Math.min(ant.energy + 200, 1100);
+          // If chambers exist, create a food drop that ants can later store
+          if (state.chambers.length > 0) {
+            state.foods.push({
+              x: ant.x + (Math.random() - 0.5) * 10,
+              y: ant.y,
+              amount: 1,
+            });
+          }
+          _changeState(ant, ST.IDLE);
+          AF.ant.setThought(ant, 'Food delivered to colony');
+          return;
+        }
       }
       break;
 
@@ -384,11 +443,90 @@ function _think(state, ant, s) {
         AF.ant.setThought(ant, 'Found food trail');
         return;
       }
-      // Done exploring? Head back with findings
+      // Done exploring? Head back
       if (ant.stateTimer > 300 + Math.random() * 200) {
-        _changeState(ant, ST.HAUL);
-        ant.carryingSand = 0;
-        AF.ant.setThought(ant, 'Reporting back');
+        if (ant.carryingSand > 0) {
+          _changeState(ant, ST.HAUL);
+          AF.ant.setThought(ant, 'Hauling findings back');
+        } else {
+          _changeState(ant, ST.IDLE);
+          AF.ant.setThought(ant, 'Reporting back');
+        }
+        return;
+      }
+      break;
+
+    // ── NURSE: tend brood — feed larvae, care for queen ──
+    case ST.NURSE:
+      // If on surface, need to enter tunnels first to reach brood/food stores
+      if (s.atSurface && !(state.brood || []).length) {
+        // No brood at all, go idle
+        _changeState(ant, ST.IDLE);
+        AF.ant.setThought(ant, 'No brood to tend');
+        return;
+      }
+      if (s.atSurface && ant.stateTimer > 30) {
+        // Enter tunnels to reach brood/food stores underground
+        _changeState(ant, ST.ENTER);
+        ant._goalExplore = false;
+        AF.ant.setThought(ant, 'Heading underground to tend brood');
+        return;
+      }
+      // If carrying food, find hungry larva to feed
+      if (ant.carryingFood > 0) {
+        const target = _findHungryLarva(state, ant);
+        if (target && Math.hypot(target.x - ant.x, target.y - ant.y) < AF.CELL * 3) {
+          // Feed the larva
+          target.fed++;
+          ant.carryingFood--;
+          ant.feedCount++;
+          AF.ant.setThought(ant, 'Fed larva');
+          if (ant.carryingFood <= 0) {
+            // Go get more food if there are still hungry larvae
+            const moreHungry = (state.brood || []).some(b => b.stage === AF.BROOD.LARVA && b.fed < AF.LARVA_FEEDINGS_NEEDED);
+            if (moreHungry) {
+              AF.ant.setThought(ant, 'Getting more food for brood');
+            } else {
+              _changeState(ant, ST.IDLE);
+              AF.ant.setThought(ant, 'Brood well fed');
+            }
+          }
+          return;
+        }
+        // Still navigating to larva
+        ant._targetBrood = target;
+      } else {
+        // Need to get food — check food stores first, then surface food
+        const foodStore = _findNearestFoodStore(state, ant);
+        if (foodStore && Math.hypot(foodStore.x - ant.x, foodStore.y - ant.y) < AF.CELL * 3) {
+          // Pick up food from store
+          foodStore.amount--;
+          ant.carryingFood = 1;
+          AF.ant.setThought(ant, 'Got food for larvae');
+          return;
+        }
+        // If no food available at all, go forage
+        const totalFood = (state.foodStores || []).reduce((s, f) => s + f.amount, 0)
+                        + state.foods.reduce((s, f) => s + f.amount, 0);
+        if (totalFood <= 0 && ant.stateTimer > 120) {
+          _changeState(ant, ST.FORAGE);
+          AF.ant.setThought(ant, 'No food, must forage for brood');
+          return;
+        }
+      }
+      // No brood left to tend?
+      if (!(state.brood || []).some(b => b.stage === AF.BROOD.LARVA && b.fed < AF.LARVA_FEEDINGS_NEEDED)) {
+        if (ant.carryingFood <= 0) {
+          _changeState(ant, ST.IDLE);
+          AF.ant.setThought(ant, 'Brood care complete');
+          return;
+        }
+      }
+      // Timeout: don't nurse forever if stuck
+      if (ant.stateTimer > 600) {
+        ant.carryingFood = 0;
+        _changeState(ant, ST.IDLE);
+        AF.ant.setThought(ant, 'Taking a break from nursing');
         return;
       }
       break;
@@ -410,18 +548,38 @@ function _think(state, ant, s) {
 }
 
 // ── Initiative system: ant evaluates colony needs ──
+// Age-based polyethism: young ants (low maturity) prefer nursing, older ants prefer outside work
 function _evaluateInitiative(state, ant, s, goals) {
   const ST = AF.ST;
+  const isYoung = ant.maturity < 0.35;  // young ants prefer nursing/indoor work
+  const isOld = ant.maturity > 0.65;    // older ants prefer foraging/exploring
 
-  // High-priority: if food is nearby, go get it
-  if (s.nearestFood && Math.random() < 0.4) {
+  // ── NURSING PRIORITY: young ants check brood needs first ──
+  if (goals && goals.needsNurses && goals.hungryLarvae > 0) {
+    const roles = AF.colony.getRoleCounts(state);
+    const nursePriority = (state.tuning && state.tuning.nursePriority) || 5;
+    const desiredNurses = Math.max(1, Math.ceil(goals.hungryLarvae * 0.7));
+    if (roles.nurse < desiredNurses) {
+      // Young ants volunteer readily, older ones less so
+      const nurseChance = isYoung ? 0.5 : (isOld ? 0.05 : 0.15);
+      if (Math.random() < nurseChance) {
+        _changeState(ant, ST.NURSE);
+        ant.carryingFood = 0;
+        AF.ant.setThought(ant, isYoung ? 'Tending to the brood' : 'Helping with nursery duties');
+        return true;
+      }
+    }
+  }
+
+  // High-priority: if food is nearby and ant is mature enough for outdoor work
+  if (s.nearestFood && Math.random() < (isYoung ? 0.15 : 0.4)) {
     _changeState(ant, ST.FORAGE);
     AF.ant.setThought(ant, 'Food spotted nearby');
     return true;
   }
 
-  // Food pheromone detection
-  if (s.foodGrad.strength > 0.1 && Math.random() < 0.15) {
+  // Food pheromone detection (older ants more responsive)
+  if (s.foodGrad.strength > 0.1 && Math.random() < (isOld ? 0.2 : 0.1)) {
     _changeState(ant, ST.FORAGE);
     AF.ant.setThought(ant, 'Following food scent');
     return true;
@@ -450,7 +608,7 @@ function _evaluateInitiative(state, ant, s, goals) {
           AF.ant.setThought(ant, 'Helping dig galleries');
           return true;
         }
-        if (roles.explorer < totalWorkers * 0.15 && Math.random() < 0.2) {
+        if (roles.explorer < totalWorkers * 0.15 && Math.random() < (isOld ? 0.25 : 0.1)) {
           _changeState(ant, ST.ENTER);
           ant._goalExplore = true;
           AF.ant.setThought(ant, 'Scouting for galleries');
@@ -474,7 +632,7 @@ function _evaluateInitiative(state, ant, s, goals) {
           AF.ant.setThought(ant, 'Expanding colony');
           return true;
         }
-        if (roles.explorer < totalWorkers * 0.2 && Math.random() < 0.15) {
+        if (roles.explorer < totalWorkers * 0.2 && Math.random() < (isOld ? 0.2 : 0.1)) {
           _changeState(ant, ST.ENTER);
           ant._goalExplore = true;
           AF.ant.setThought(ant, 'Exploring new territory');
@@ -483,8 +641,8 @@ function _evaluateInitiative(state, ant, s, goals) {
         break;
     }
 
-    // If colony needs food, volunteer to forage
-    if (goals.needsFood && roles.forager < totalWorkers * 0.2 && Math.random() < 0.2) {
+    // If colony needs food, volunteer to forage (older ants more likely)
+    if (goals.needsFood && roles.forager < totalWorkers * 0.2 && Math.random() < (isOld ? 0.3 : 0.15)) {
       _changeState(ant, ST.FORAGE);
       AF.ant.setThought(ant, 'Colony needs food');
       return true;
@@ -563,7 +721,12 @@ function _act(state, ant, s) {
       break;
 
     case ST.CARRY:
-      _moveUp(state, ant, s, spd);
+      // If there's a food chamber underground, navigate there; otherwise go up
+      if (ant._targetChamber && s.underground) {
+        _moveToTarget(state, ant, s, spd, ant._targetChamber.x, ant._targetChamber.y);
+      } else {
+        _moveUp(state, ant, s, spd);
+      }
       AF.pheromones.set(state, s.gx, s.gy, 0.3, 'phFood');
       AF.pheromones.set(state, s.gx, s.gy, 0.15, 'phTrail');
       break;
@@ -571,6 +734,11 @@ function _act(state, ant, s) {
     case ST.EXPLORE:
       _moveExplore(state, ant, s, spd);
       AF.pheromones.set(state, s.gx, s.gy, 0.08, 'phTrail');
+      break;
+
+    case ST.NURSE:
+      _moveNurse(state, ant, s, spd);
+      AF.pheromones.set(state, s.gx, s.gy, 0.06, 'phTrail');
       break;
   }
 
@@ -832,6 +1000,103 @@ function _moveExplore(state, ant, s, spd) {
   ant.vy *= 0.87;
 }
 
+// ── Generic target navigation (used by CARRY to food chamber, NURSE to targets) ──
+function _moveToTarget(state, ant, s, spd, tx, ty) {
+  const dx = tx - ant.x;
+  const dy = ty - ant.y;
+  const dist = Math.hypot(dx, dy);
+  if (dist > 1) {
+    ant.heading = Math.atan2(dy, dx);
+    ant.vx += (dx / dist) * spd * 0.35;
+    ant.vy += (dy / dist) * spd * 0.35;
+  }
+  // Trail following helps navigate tunnels
+  if (s.trailGrad.angle !== null && Math.random() < 0.1) {
+    ant.heading += (s.trailGrad.angle - ant.heading) * 0.08;
+  }
+  ant.vx *= 0.88;
+  ant.vy *= 0.88;
+}
+
+// ── Nurse movement: navigate to food stores or brood ──
+function _moveNurse(state, ant, s, spd) {
+  let targetX, targetY;
+
+  if (ant.carryingFood > 0) {
+    // Carrying food → navigate to hungry larva
+    const target = ant._targetBrood || _findHungryLarva(state, ant);
+    if (target) {
+      targetX = target.x;
+      targetY = target.y;
+    } else {
+      // No hungry larvae, wander
+      _moveExplore(state, ant, s, spd);
+      return;
+    }
+  } else {
+    // Need food → navigate to nearest food store
+    const store = _findNearestFoodStore(state, ant);
+    if (store) {
+      targetX = store.x;
+      targetY = store.y;
+    } else {
+      // Check surface food
+      if (s.nearestFood) {
+        targetX = s.nearestFood.x;
+        targetY = s.nearestFood.y;
+      } else {
+        _moveExplore(state, ant, s, spd);
+        return;
+      }
+    }
+  }
+
+  // Navigate toward target
+  const dx = targetX - ant.x;
+  const dy = targetY - ant.y;
+  const dist = Math.hypot(dx, dy);
+  if (dist > 1) {
+    ant.heading = Math.atan2(dy, dx);
+    ant.vx += (dx / dist) * spd * 0.4;
+    ant.vy += (dy / dist) * spd * 0.4;
+  }
+
+  ant.vx *= 0.88;
+  ant.vy *= 0.88;
+}
+
+// ── Find hungry larva nearest to ant ──
+function _findHungryLarva(state, ant) {
+  const brood = state.brood || [];
+  let best = null, bestDist = 500;
+  for (const b of brood) {
+    if (b.stage !== AF.BROOD.LARVA || b.fed >= AF.LARVA_FEEDINGS_NEEDED) continue;
+    const d = Math.hypot(b.x - ant.x, b.y - ant.y);
+    if (d < bestDist) { bestDist = d; best = b; }
+  }
+  return best;
+}
+
+// ── Find nearest food store (underground) ──
+function _findNearestFoodStore(state, ant) {
+  const stores = state.foodStores || [];
+  let best = null, bestDist = 600;
+  for (const f of stores) {
+    if (f.amount <= 0) continue;
+    const d = Math.hypot(f.x - ant.x, f.y - ant.y);
+    if (d < bestDist) { bestDist = d; best = f; }
+  }
+  // Also check surface food as fallback
+  if (!best) {
+    for (const f of state.foods) {
+      if (f.amount <= 0) continue;
+      const d = Math.hypot(f.x - ant.x, f.y - ant.y);
+      if (d < bestDist) { bestDist = d; best = f; }
+    }
+  }
+  return best;
+}
+
 // ═══════════════════════════════════════════════════════════════════
 //  PHYSICS — gravity, collision, bounds
 // ═══════════════════════════════════════════════════════════════════
@@ -894,6 +1159,9 @@ function _changeState(ant, newState) {
   ant.state = newState;
   ant.stateTimer = 0;
   ant.stuck = 0;
+  // Clear stale navigation targets
+  ant._targetBrood = null;
+  ant._targetChamber = null;
 }
 
 function _unstick(state, ant) {
@@ -940,26 +1208,119 @@ function _queenBehavior(state, ant) {
   const s = _sense(state, ant);
   ant.age++;
 
-  if (state.entranceX > 0) {
-    const targetX = state.entranceX * AF.CELL + AF.CELL / 2;
-    ant.vx += (targetX - ant.x) * 0.01;
+  // Queen behavioral phases:
+  // 1. Early colony (day 1-2): Stay on surface near entrance until shaft is started
+  // 2. Once shaft exists: Descend to deepest chamber (royal chamber)
+  // 3. Underground: Stay in royal chamber, lay eggs
+
+  const goals = state.colonyGoals;
+  const shaftReady = goals && goals.shaftDepth > 8;
+  const hasRoyalChamber = state.chambers.some(c => c.type === AF.CHAMBER_TYPE.ROYAL);
+
+  if (!state.queenUnderground && shaftReady) {
+    // Queen descends — navigate to entrance and go down
+    if (state.entranceX > 0) {
+      const targetX = state.entranceX * AF.CELL + AF.CELL / 2;
+      const dx = targetX - ant.x;
+
+      if (s.atSurface) {
+        if (Math.abs(dx) > AF.CELL * 2) {
+          ant.vx += Math.sign(dx) * 0.4;
+          ant.heading = dx > 0 ? 0 : Math.PI;
+        } else {
+          // At entrance, descend
+          ant.vy += 0.5;
+          ant.heading = Math.PI * 0.5;
+        }
+      } else {
+        // Keep going down
+        ant.vy += 0.3;
+        ant.vx += Math.sign(dx) * 0.05;
+        // Check if we've reached a chamber
+        if (s.underground) {
+          const nearChamber = AF.colony.findNearestChamber(state, ant.x, ant.y);
+          if (nearChamber && Math.hypot(nearChamber.x - ant.x, nearChamber.y - ant.y) < AF.CELL * 8) {
+            state.queenUnderground = true;
+            AF.ant.setThought(ant, 'Establishing royal chamber');
+          }
+        }
+      }
+    }
+  } else if (state.queenUnderground) {
+    // Queen is underground — stay in royal chamber area
+    const royal = AF.colony.findChamber(state, AF.CHAMBER_TYPE.ROYAL);
+    if (royal) {
+      // Gently drift toward royal chamber center
+      const dx = royal.x - ant.x;
+      const dy = royal.y - ant.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist > AF.CELL * 4) {
+        ant.vx += (dx / dist) * 0.15;
+        ant.vy += (dy / dist) * 0.15;
+      }
+    }
+
+    // Gentle movement within chamber
+    ant.meanderPhase += 0.015;
+    ant.vx += Math.sin(ant.meanderPhase) * 0.03;
+    ant.vy += Math.cos(ant.meanderPhase * 0.7) * 0.02;
+
+    // Gravity
+    if (!s.below) ant.vy += 0.12;
+
+    // Periodic egg-laying thought
+    if (ant.age % 600 === 0 && (state.brood || []).length > 0) {
+      AF.ant.setThought(ant, 'Tending to my eggs');
+    }
+  } else {
+    // Surface behavior (early colony, before shaft is ready)
+    if (state.entranceX > 0) {
+      const targetX = state.entranceX * AF.CELL + AF.CELL / 2;
+      ant.vx += (targetX - ant.x) * 0.01;
+    }
+
+    if (ant.y > AF.SURFACE_PX + AF.CELL) ant.vy -= 0.2;
+    if (ant.y < AF.SURFACE_PX - AF.CELL * 3) ant.vy += 0.15;
+
+    ant.meanderPhase += 0.02;
+    ant.vx += Math.sin(ant.meanderPhase) * 0.05;
+
+    if (!s.below) ant.vy += 0.15;
   }
-
-  if (ant.y > AF.SURFACE_PX + AF.CELL) ant.vy -= 0.2;
-  if (ant.y < AF.SURFACE_PX - AF.CELL * 3) ant.vy += 0.15;
-
-  ant.meanderPhase += 0.02;
-  ant.vx += Math.sin(ant.meanderPhase) * 0.05;
 
   ant.vx *= 0.92;
   ant.vy *= 0.9;
 
-  if (!s.below) ant.vy += 0.15;
+  // Terrain collision for queen (prevents going through walls)
+  let nx = ant.x + ant.vx;
+  let ny = ant.y + ant.vy;
+  const ngx = (nx / AF.CELL) | 0;
+  const ngy = (ny / AF.CELL) | 0;
+  const gx = AF.ant.gx(ant);
+  const gy = AF.ant.gy(ant);
 
-  ant.x += ant.vx;
-  ant.y += ant.vy;
-  ant.x = AF.clamp(ant.x, AF.FRAME + AF.CELL * 3, AF.W - AF.FRAME - AF.CELL * 3);
-  ant.y = AF.clamp(ant.y, AF.SURFACE_PX - AF.CELL * 4, AF.SURFACE_PX + AF.CELL * 3);
+  if (AF.terrain.isSolid(state, ngx, ngy)) {
+    if (!AF.terrain.isSolid(state, gx, ngy)) {
+      nx = ant.x; ant.vx *= 0.1;
+    } else if (!AF.terrain.isSolid(state, ngx, gy)) {
+      ny = ant.y; ant.vy *= 0.1;
+    } else {
+      nx = ant.x; ny = ant.y;
+      ant.vx *= 0.05; ant.vy *= 0.05;
+    }
+  }
+
+  ant.x = nx;
+  ant.y = ny;
+
+  // Bounds depend on whether queen is underground
+  if (state.queenUnderground) {
+    ant.x = AF.clamp(ant.x, AF.FRAME + AF.CELL, AF.W - AF.FRAME - AF.CELL);
+    ant.y = AF.clamp(ant.y, AF.SURFACE_PX, AF.H - AF.FRAME * 2.5 - AF.CELL);
+  } else {
+    ant.x = AF.clamp(ant.x, AF.FRAME + AF.CELL * 3, AF.W - AF.FRAME - AF.CELL * 3);
+    ant.y = AF.clamp(ant.y, AF.SURFACE_PX - AF.CELL * 4, AF.SURFACE_PX + AF.CELL * 3);
+  }
 
   ant.legT += 0.08;
   ant.antT += 0.04;

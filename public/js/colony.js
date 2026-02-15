@@ -1,10 +1,12 @@
 // =====================================================================
-//  ANTFARM v10 — Colony: creation, tick loop, spawning, serialization
+//  ANTFARM v11 — Colony: creation, tick loop, brood, serialization
 // =====================================================================
 
 'use strict';
 
 AF.colony = {};
+
+let _nextBroodId = 1;
 
 // ═══════════════════════════════════════════════════════════════════
 //  CREATE — fresh colony
@@ -19,10 +21,13 @@ AF.colony.create = function() {
     ants: [],
     foods: [],
     chambers: [],
+    brood: [],            // eggs, larvae, pupae
+    foodStores: [],       // underground food deposits in chambers
     frame: 0,
     totalDug: 0,
     simDay: 1,
     hasQueen: false,
+    queenUnderground: false,
     entranceX: -1,
     terrainDirty: true,
 
@@ -43,6 +48,7 @@ AF.colony.create = function() {
       antMaxEnergy: 100,
       queenSpawnRate: 1800,
       sandCarryMax: 5,
+      nursePriority: 5,     // how many nurses colony wants (1-10)
     },
 
     // Colony intelligence
@@ -81,6 +87,10 @@ AF.colony.create = function() {
 AF.colony.tick = function(state) {
   state.frame++;
 
+  // Ensure brood/foodStores arrays exist (backward compat)
+  if (!state.brood) state.brood = [];
+  if (!state.foodStores) state.foodStores = [];
+
   // Colony intelligence: update goals every 120 frames (~2 seconds)
   if (state.frame % 120 === 0) {
     AF.behavior.updateColonyGoals(state);
@@ -96,10 +106,15 @@ AF.colony.tick = function(state) {
     AF.terrain.gravity(state);
   }
 
-  // Update all ants
+  // Update all ants (including maturity aging)
   for (let i = state.ants.length - 1; i >= 0; i--) {
     const ant = state.ants[i];
     AF.behavior.update(state, ant);
+
+    // Age-based maturity increase (young ants mature over time)
+    if (!ant.isQueen && ant.maturity < 1.0) {
+      ant.maturity = Math.min(1.0, ant.maturity + 0.00003); // full maturity ~33000 frames (~9 min)
+    }
 
     // Remove dead ants
     if (ant._dead) {
@@ -108,17 +123,68 @@ AF.colony.tick = function(state) {
     }
   }
 
-  // Queen spawns new ant (rate tunable by AI cron)
+  // ── Queen lays eggs (realistic brood reproduction) ──
   const spawnRate = (state.tuning && state.tuning.queenSpawnRate) || 1800;
-  if (state.frame % spawnRate === 0 && state.hasQueen && state.ants.length < 60) {
+  const totalPop = state.ants.length + state.brood.length;
+  if (state.frame % spawnRate === 0 && state.hasQueen && totalPop < 80) {
     const queen = state.ants.find(a => a.isQueen);
     if (queen) {
-      const baby = AF.ant.create(
-        queen.x + (Math.random() - 0.5) * 20,
-        queen.y - AF.CELL,
-        false
-      );
+      // Queen lays an egg at her location
+      const foodAvailable = state.foodStores.reduce((s, f) => s + f.amount, 0)
+                          + state.foods.reduce((s, f) => s + f.amount, 0);
+      // Need some food in colony to lay eggs (starvation prevents reproduction)
+      if (foodAvailable > 0 || state.brood.length < 3) {
+        // Place egg in open space near queen
+        let eggX = queen.x + (Math.random() - 0.5) * 8;
+        let eggY = queen.y + (Math.random() - 0.5) * 6;
+        const egx = (eggX / AF.CELL) | 0;
+        const egy = (eggY / AF.CELL) | 0;
+        // If placement is inside solid terrain, use queen's position
+        if (AF.terrain.isSolid(state, egx, egy)) {
+          eggX = queen.x;
+          eggY = queen.y;
+        }
+        state.brood.push({
+          id: _nextBroodId++,
+          stage: AF.BROOD.EGG,
+          x: eggX,
+          y: eggY,
+          age: 0,
+          fed: 0,       // feedings received (larvae need AF.LARVA_FEEDINGS_NEEDED)
+        });
+      }
+    }
+  }
+
+  // ── Brood development ──
+  for (let i = state.brood.length - 1; i >= 0; i--) {
+    const b = state.brood[i];
+    b.age++;
+
+    if (b.stage === AF.BROOD.EGG && b.age >= AF.BROOD_TIME.EGG) {
+      // Egg hatches into larva
+      b.stage = AF.BROOD.LARVA;
+      b.age = 0;
+      b.fed = 0;
+    } else if (b.stage === AF.BROOD.LARVA) {
+      // Larva needs feeding AND time to pupate
+      if (b.age >= AF.BROOD_TIME.LARVA && b.fed >= AF.LARVA_FEEDINGS_NEEDED) {
+        b.stage = AF.BROOD.PUPA;
+        b.age = 0;
+      }
+      // Unfed larvae die after double the normal time
+      if (b.age > AF.BROOD_TIME.LARVA * 2 && b.fed < AF.LARVA_FEEDINGS_NEEDED) {
+        state.brood.splice(i, 1);
+        continue;
+      }
+    } else if (b.stage === AF.BROOD.PUPA && b.age >= AF.BROOD_TIME.PUPA) {
+      // Pupa emerges as adult ant
+      const baby = AF.ant.create(b.x, b.y, false);
+      baby.maturity = 0.0; // newborns start as young nurses
+      baby.energy = 700 + Math.random() * 200;
       state.ants.push(baby);
+      state.brood.splice(i, 1);
+      continue;
     }
   }
 
@@ -127,13 +193,15 @@ AF.colony.tick = function(state) {
     state.simDay++;
   }
 
-  // Chamber detection every 300 frames
+  // Chamber detection every 300 frames (with type assignment)
   if (state.frame % 300 === 0) {
     AF.colony.detectChambers(state);
+    AF.colony.assignChamberTypes(state);
   }
 
-  // Clean up depleted food
+  // Clean up depleted food (surface and underground)
   state.foods = state.foods.filter(f => f.amount > 0);
+  state.foodStores = state.foodStores.filter(f => f.amount > 0);
 };
 
 // ═══════════════════════════════════════════════════════════════════
@@ -142,6 +210,15 @@ AF.colony.tick = function(state) {
 
 AF.colony.detectChambers = function(state) {
   const { COLS, ROWS, SURFACE, CELL } = AF;
+  // Preserve old chamber types for continuity
+  const oldTypes = {};
+  for (const c of state.chambers) {
+    if (c.type && c.type !== AF.CHAMBER_TYPE.GENERAL) {
+      const key = Math.round(c.x / CELL) + ',' + Math.round(c.y / CELL);
+      oldTypes[key] = c.type;
+    }
+  }
+
   state.chambers = [];
   const vis = new Uint8Array(COLS * ROWS);
 
@@ -150,9 +227,12 @@ AF.colony.detectChambers = function(state) {
       const i = y * COLS + x;
       if (!state.grid[i] && !vis[i]) {
         let n = 0, sx = 0, sy = 0;
+        let minY = ROWS, maxY = 0;
         const q = [[x, y]]; vis[i] = 1;
         while (q.length && n < 1200) {
           const [cx, cy] = q.pop(); n++; sx += cx; sy += cy;
+          if (cy < minY) minY = cy;
+          if (cy > maxY) maxY = cy;
           for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
             const nx = cx + dx, ny = cy + dy;
             if (nx >= 0 && nx < COLS && ny >= SURFACE && ny < ROWS) {
@@ -162,11 +242,127 @@ AF.colony.detectChambers = function(state) {
           }
         }
         if (n >= 40) {
-          state.chambers.push({ x: (sx / n) * CELL, y: (sy / n) * CELL, size: n });
+          const cx = (sx / n) * CELL;
+          const cy = (sy / n) * CELL;
+          const key = Math.round(sx / n) + ',' + Math.round(sy / n);
+          state.chambers.push({
+            x: cx, y: cy, size: n,
+            depth: (sy / n) - SURFACE,
+            type: oldTypes[key] || AF.CHAMBER_TYPE.GENERAL,
+          });
         }
       }
     }
   }
+};
+
+// ═══════════════════════════════════════════════════════════════════
+//  CHAMBER TYPE ASSIGNMENT — functional purpose based on contents
+// ═══════════════════════════════════════════════════════════════════
+
+AF.colony.assignChamberTypes = function(state) {
+  if (!state.chambers.length) return;
+
+  const CELL = AF.CELL;
+  const queen = state.ants.find(a => a.isQueen);
+
+  // Sort chambers by depth (deepest first)
+  const byDepth = state.chambers.slice().sort((a, b) => b.depth - a.depth);
+
+  // Reset types that aren't locked
+  for (const c of state.chambers) {
+    c._hasQueen = false;
+    c._hasBrood = false;
+    c._hasFood = false;
+  }
+
+  // Check what's in each chamber
+  for (const c of state.chambers) {
+    const r = Math.sqrt(c.size) * CELL * 0.5;
+
+    // Queen in this chamber?
+    if (queen) {
+      const qd = Math.hypot(queen.x - c.x, queen.y - c.y);
+      if (qd < r + 10) c._hasQueen = true;
+    }
+
+    // Brood in this chamber?
+    for (const b of state.brood) {
+      const bd = Math.hypot(b.x - c.x, b.y - c.y);
+      if (bd < r + 10) { c._hasBrood = true; break; }
+    }
+
+    // Food stores in this chamber?
+    for (const f of state.foodStores) {
+      const fd = Math.hypot(f.x - c.x, f.y - c.y);
+      if (fd < r + 10) { c._hasFood = true; break; }
+    }
+  }
+
+  // Assign types based on contents and position
+  let hasRoyal = false, hasBrood = false, hasFood = false, hasMidden = false;
+
+  for (const c of byDepth) {
+    if (c._hasQueen && !hasRoyal) {
+      c.type = AF.CHAMBER_TYPE.ROYAL;
+      hasRoyal = true;
+    } else if (c._hasBrood && !hasBrood) {
+      c.type = AF.CHAMBER_TYPE.BROOD;
+      hasBrood = true;
+    } else if (c._hasFood && !hasFood) {
+      c.type = AF.CHAMBER_TYPE.FOOD;
+      hasFood = true;
+    }
+  }
+
+  // If no royal chamber but queen exists underground, assign deepest large chamber
+  if (!hasRoyal && queen && AF.ant.underground(queen)) {
+    const candidate = byDepth.find(c => c.size >= 50 && c.type === AF.CHAMBER_TYPE.GENERAL);
+    if (candidate) { candidate.type = AF.CHAMBER_TYPE.ROYAL; hasRoyal = true; }
+  }
+
+  // Assign midden to shallowest small chamber
+  const byShallow = state.chambers.slice().sort((a, b) => a.depth - b.depth);
+  for (const c of byShallow) {
+    if (c.type === AF.CHAMBER_TYPE.GENERAL && c.size < 120 && !hasMidden) {
+      c.type = AF.CHAMBER_TYPE.MIDDEN;
+      hasMidden = true;
+      break;
+    }
+  }
+
+  // If brood exists but no brood chamber, assign nearest general chamber to brood
+  if (!hasBrood && state.brood.length > 0) {
+    const broodCenter = state.brood.reduce((a, b) => ({ x: a.x + b.x, y: a.y + b.y }), { x: 0, y: 0 });
+    broodCenter.x /= state.brood.length;
+    broodCenter.y /= state.brood.length;
+    let best = null, bestDist = Infinity;
+    for (const c of state.chambers) {
+      if (c.type === AF.CHAMBER_TYPE.GENERAL) {
+        const d = Math.hypot(c.x - broodCenter.x, c.y - broodCenter.y);
+        if (d < bestDist) { bestDist = d; best = c; }
+      }
+    }
+    if (best) best.type = AF.CHAMBER_TYPE.BROOD;
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════════
+//  HELPER: find chamber by type
+// ═══════════════════════════════════════════════════════════════════
+
+AF.colony.findChamber = function(state, type) {
+  return state.chambers.find(c => c.type === type) || null;
+};
+
+AF.colony.findNearestChamber = function(state, x, y, type) {
+  let best = null, bestDist = Infinity;
+  for (const c of state.chambers) {
+    if (type && c.type !== type) continue;
+    const d = Math.hypot(c.x - x, c.y - y);
+    if (d < bestDist) { bestDist = d; best = c; }
+  }
+  return best;
 };
 
 // ═══════════════════════════════════════════════════════════════════
@@ -214,6 +410,7 @@ AF.colony.applyDirective = function(state, directive) {
     case 'explore':       state.digPriority = 3; break;
     case 'forage':        state.digPriority = 2; break;
     case 'rest':          state.digPriority = 1; break;
+    case 'nurse':         state.digPriority = 3; break;
     default:              state.digPriority = 5; break;
   }
 
@@ -229,6 +426,7 @@ AF.colony.applyDirective = function(state, directive) {
     if (t.antMaxEnergy != null) state.tuning.antMaxEnergy = AF.clamp(t.antMaxEnergy, 50, 200);
     if (t.queenSpawnRate != null) state.tuning.queenSpawnRate = AF.clamp(t.queenSpawnRate, 600, 5400);
     if (t.sandCarryMax != null) state.tuning.sandCarryMax = AF.clamp(t.sandCarryMax, 1, 10);
+    if (t.nursePriority != null) state.tuning.nursePriority = AF.clamp(t.nursePriority, 1, 10);
   }
 
   // Role shifts: nudge some ants between states
@@ -237,6 +435,7 @@ AF.colony.applyDirective = function(state, directive) {
     let toDigger = rs.idle_to_digger || 0;
     let toForager = rs.idle_to_forager || 0;
     let toExplorer = rs.idle_to_explorer || 0;
+    let toNurse = rs.idle_to_nurse || 0;
 
     for (const ant of state.ants) {
       if (ant.isQueen) continue;
@@ -247,6 +446,8 @@ AF.colony.applyDirective = function(state, directive) {
           ant.state = AF.ST.FORAGE; ant.stateTimer = 0; toForager--;
         } else if (toExplorer > 0) {
           ant.state = AF.ST.EXPLORE; ant.stateTimer = 0; toExplorer--;
+        } else if (toNurse > 0) {
+          ant.state = AF.ST.NURSE; ant.stateTimer = 0; toNurse--;
         }
       }
     }
@@ -258,7 +459,7 @@ AF.colony.applyDirective = function(state, directive) {
 // ═══════════════════════════════════════════════════════════════════
 
 AF.colony.getSnapshot = function(state) {
-  const roles = { digger: 0, forager: 0, explorer: 0, idle: 0 };
+  const roles = { digger: 0, forager: 0, explorer: 0, nurse: 0, idle: 0 };
   let avgEnergy = 0, stuckCount = 0;
   for (const ant of state.ants) {
     if (ant.isQueen) continue;
@@ -266,6 +467,7 @@ AF.colony.getSnapshot = function(state) {
       case 'digger': roles.digger++; break;
       case 'forager': roles.forager++; break;
       case 'explorer': roles.explorer++; break;
+      case 'nurse': roles.nurse++; break;
       default: roles.idle++; break;
     }
     avgEnergy += ant.energy;
@@ -276,13 +478,36 @@ AF.colony.getSnapshot = function(state) {
 
   const dug = ((state.totalDug / ((AF.ROWS - AF.SURFACE) * AF.COLS)) * 100).toFixed(1);
 
+  // Brood counts
+  const broodCounts = { eggs: 0, larvae: 0, pupae: 0 };
+  for (const b of (state.brood || [])) {
+    if (b.stage === AF.BROOD.EGG) broodCounts.eggs++;
+    else if (b.stage === AF.BROOD.LARVA) broodCounts.larvae++;
+    else if (b.stage === AF.BROOD.PUPA) broodCounts.pupae++;
+  }
+
+  // Chamber types
+  const chamberTypes = {};
+  for (const c of state.chambers) {
+    const t = c.type || 'general';
+    chamberTypes[t] = (chamberTypes[t] || 0) + 1;
+  }
+
+  // Food reserves (surface + underground)
+  const surfaceFood = state.foods.reduce((s, f) => s + f.amount, 0);
+  const storedFood = (state.foodStores || []).reduce((s, f) => s + f.amount, 0);
+
   return {
     day: state.simDay,
     pop: pop,
     dug: dug + '%',
     roles: roles,
-    food: state.foods.reduce((s, f) => s + f.amount, 0),
+    food: surfaceFood,
+    storedFood: storedFood,
+    brood: broodCounts,
     chambers: state.chambers.length,
+    chamberTypes: chamberTypes,
+    queenUnderground: state.queenUnderground || false,
     avgEnergy: avgEnergy,
     stuck: stuckCount,
   };
@@ -308,23 +533,29 @@ AF.colony.serialize = function(state) {
     state: a.state, prevState: a.prevState,
     energy: +a.energy.toFixed(1), age: a.age,
     isQueen: a.isQueen,
+    maturity: +(a.maturity || 0).toFixed(3),
     carrying: a.carrying, carryingSand: a.carryingSand,
+    carryingFood: a.carryingFood || 0,
     maxSandCarry: a.maxSandCarry,
     heading: +a.heading.toFixed(3), digAngle: +a.digAngle.toFixed(3),
     stuck: a.stuck, digCD: a.digCD, digCount: a.digCount,
     stateTimer: a.stateTimer, timeSinceRest: a.timeSinceRest,
+    feedCount: a.feedCount || 0,
     role: a.role, name: a.name,
     size: +a.size.toFixed(2), hue: +a.hue.toFixed(1),
   }));
 
   return {
-    v: 10,
+    v: 11,
     grid: gridB64,
     phTrail, phFood, phDig,
     ants, foods: state.foods,
     chambers: state.chambers,
+    brood: state.brood || [],
+    foodStores: state.foodStores || [],
     frame: state.frame, totalDug: state.totalDug, simDay: state.simDay,
-    hasQueen: state.hasQueen, entranceX: state.entranceX,
+    hasQueen: state.hasQueen, queenUnderground: state.queenUnderground || false,
+    entranceX: state.entranceX,
     narration: state.narration, insight: state.insight,
     digPriority: state.digPriority,
     tuning: state.tuning,
@@ -334,6 +565,19 @@ AF.colony.serialize = function(state) {
 };
 
 AF.colony.deserialize = function(data) {
+  const tuning = data.tuning || {
+    restThreshold: 20,
+    explorationBias: 0.3,
+    forageRadius: 200,
+    branchingChance: 0.15,
+    chamberSizeTarget: 60,
+    antMaxEnergy: 100,
+    queenSpawnRate: 1800,
+    sandCarryMax: 5,
+    nursePriority: 5,
+  };
+  if (!tuning.nursePriority) tuning.nursePriority = 5;
+
   const state = {
     grid: _base64ToUint8(data.grid),
     phTrail: _sparseDecode(data.phTrail, AF.COLS * AF.ROWS),
@@ -342,10 +586,13 @@ AF.colony.deserialize = function(data) {
     ants: [],
     foods: data.foods || [],
     chambers: data.chambers || [],
+    brood: data.brood || [],
+    foodStores: data.foodStores || [],
     frame: data.frame || 0,
     totalDug: data.totalDug || 0,
     simDay: data.simDay || 1,
     hasQueen: data.hasQueen || false,
+    queenUnderground: data.queenUnderground || false,
     entranceX: data.entranceX != null ? data.entranceX : -1,
     terrainDirty: true,
     narration: data.narration || '',
@@ -353,16 +600,7 @@ AF.colony.deserialize = function(data) {
     directive: null,
     tokenUsage: null,
     digPriority: data.digPriority || 7,
-    tuning: data.tuning || {
-      restThreshold: 20,
-      explorationBias: 0.3,
-      forageRadius: 200,
-      branchingChance: 0.15,
-      chamberSizeTarget: 60,
-      antMaxEnergy: 100,
-      queenSpawnRate: 1800,
-      sandCarryMax: 5,
-    },
+    tuning: tuning,
     colonyGoals: data.colonyGoals || null,
   };
 
@@ -377,11 +615,14 @@ AF.colony.deserialize = function(data) {
       id: a.id, vx: a.vx || 0, vy: a.vy || 0,
       state: a.state, prevState: a.prevState || a.state,
       energy: a.energy, age: a.age || 0,
+      maturity: a.maturity || (a.isQueen ? 1.0 : 0.5),
       carrying: a.carrying, carryingSand: a.carryingSand || 0,
+      carryingFood: a.carryingFood || 0,
       maxSandCarry: a.maxSandCarry || 5,
       heading: a.heading || 0, digAngle: a.digAngle || Math.PI * 0.5,
       stuck: a.stuck || 0, digCD: a.digCD || 0, digCount: a.digCount || 0,
       stateTimer: a.stateTimer || 0, timeSinceRest: a.timeSinceRest || 0,
+      feedCount: a.feedCount || 0,
       role: a.role || 'idle', name: a.name,
       size: a.size, hue: a.hue,
     });
@@ -394,7 +635,7 @@ AF.colony.deserialize = function(data) {
 // ── Role counts (for HUD) ──
 
 AF.colony.getRoleCounts = function(state) {
-  const counts = { digger: 0, forager: 0, explorer: 0, idle: 0, resting: 0 };
+  const counts = { digger: 0, forager: 0, explorer: 0, nurse: 0, idle: 0, resting: 0 };
   for (const ant of state.ants) {
     if (ant.isQueen) continue;
     const r = ant.role;

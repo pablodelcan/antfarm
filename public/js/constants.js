@@ -30,7 +30,7 @@ AF.TUNNEL_B = 80;
 AF.BASE_SPEED = 0.8;
 AF.LOADED_SPEED = 0.45;
 
-// Simplified 8-state machine
+// 9-state machine (added NURSE for brood care)
 AF.ST = {
   IDLE:    0,
   ENTER:   1,
@@ -39,13 +39,42 @@ AF.ST = {
   FORAGE:  4,
   CARRY:   5,
   EXPLORE: 6,
-  REST:    7
+  REST:    7,
+  NURSE:   8,
 };
 
 AF.ST_NAMES = [
   'Idle', 'Entering', 'Digging', 'Hauling sand',
-  'Foraging', 'Carrying food', 'Exploring', 'Resting'
+  'Foraging', 'Carrying food', 'Exploring', 'Resting', 'Nursing brood'
 ];
+
+// Brood lifecycle stages
+AF.BROOD = {
+  EGG:   0,
+  LARVA: 1,
+  PUPA:  2,
+};
+
+AF.BROOD_NAMES = ['Egg', 'Larva', 'Pupa'];
+
+// Brood development durations (frames)
+AF.BROOD_TIME = {
+  EGG:   900,    // ~15 seconds to hatch into larva
+  LARVA: 1800,   // ~30 seconds (needs feeding to advance)
+  PUPA:  1200,   // ~20 seconds to emerge as adult
+};
+
+// Feedings required for larva to pupate
+AF.LARVA_FEEDINGS_NEEDED = 3;
+
+// Chamber functional types
+AF.CHAMBER_TYPE = {
+  GENERAL: 'general',
+  ROYAL:   'royal',    // queen's residence, egg laying
+  BROOD:   'brood',    // nursery for eggs/larvae/pupae
+  FOOD:    'food',     // food storage granary
+  MIDDEN:  'midden',   // waste disposal
+};
 
 // Ant names (fun colony member names)
 AF.ANT_NAMES = [

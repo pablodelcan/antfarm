@@ -22,18 +22,27 @@ THE PARAMETERS YOU CAN TUNE (with their current defaults):
 - branchingChance (0-1): Probability of creating a new gallery branch while digging. Default: 0.15
 - chamberSizeTarget (40-200): Target size in cells for carved chambers. Default: 60
 - antMaxEnergy (50-200): Maximum energy capacity per ant. Default: 100
-- queenSpawnRate (600-5400): Frames between new ant births. Default: 1800
+- queenSpawnRate (600-5400): Frames between queen laying eggs. Default: 1800
 - sandCarryMax (1-10): Max sand grains an ant can carry before hauling. Default: 5
-- focus: The colony's primary strategic focus (extend_shaft, extend_gallery, dig_chamber, forage, rest, explore)
-- role_shift: How many idle ants to redirect (idle_to_digger, idle_to_forager, idle_to_explorer)
+- nursePriority (1-10): How aggressively young ants are recruited to nurse brood. Default: 5
+- focus: The colony's primary strategic focus (extend_shaft, extend_gallery, dig_chamber, forage, rest, explore, nurse)
+- role_shift: How many idle ants to redirect (idle_to_digger, idle_to_forager, idle_to_explorer, idle_to_nurse)
+
+COLONY LIFECYCLE (REALISTIC):
+- The queen lays eggs underground. Eggs hatch into larvae that MUST be fed by nurse ants.
+- Fed larvae become pupae, which emerge as adult workers. Unfed larvae die.
+- Young workers naturally become nurses; older workers forage and explore (age-based polyethism).
+- Food must be foraged, stored in food chambers, and carried by nurses to feed larvae.
+- Functional chambers: royal (queen), brood (nursery), food (granary), midden (waste).
 
 STRATEGY GUIDELINES:
-- Early colony (day 1-5): Prioritize shaft depth, high dig priority, low exploration
-- Growth (day 5-20): Balance digging with foraging, increase branching, create chambers
-- Mature (day 20+): High exploration, diverse chambers, aggressive foraging
+- Early colony (day 1-5): Prioritize shaft depth, high dig priority, get queen underground, start brood care
+- Growth (day 5-20): Balance digging with foraging, increase branching, create chambers, ensure nurse coverage
+- Mature (day 20+): High exploration, diverse chambers, aggressive foraging, maintain healthy brood pipeline
+- If larvae are hungry: increase nursePriority, ensure foragers feed stores, shift idle to nurse
 - If many ants are stuck: reduce dig priority, increase exploration bias
 - If energy is low: increase foraging, raise rest threshold
-- If tunnels are crowded: increase branching chance, encourage exploration
+- If food stores are empty and larvae exist: URGENT — shift to foraging
 - ALWAYS provide a brief narration and insight for viewers
 
 Respond ONLY with valid JSON:
@@ -47,11 +56,12 @@ Respond ONLY with valid JSON:
     "chamberSizeTarget": <number>,
     "antMaxEnergy": <number>,
     "queenSpawnRate": <number>,
-    "sandCarryMax": <number>
+    "sandCarryMax": <number>,
+    "nursePriority": <number>
   },
   "focus": "<strategic focus>",
-  "role_shift": {"idle_to_digger": <n>, "idle_to_forager": <n>, "idle_to_explorer": <n>},
-  "insight": "<1 sentence — poetic or scientific observation about ant colony intelligence>",
+  "role_shift": {"idle_to_digger": <n>, "idle_to_forager": <n>, "idle_to_explorer": <n>, "idle_to_nurse": <n>},
+  "insight": "<1 sentence — poetic or scientific observation about ant colony intelligence, brood care, or cooperation>",
   "narration": "<1-2 sentences — vivid observation of the colony's current state, reference specific data>"
 }`;
 
@@ -164,7 +174,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 function buildEvolutionSnapshot(checkpoint: any) {
   if (!checkpoint || !checkpoint.ants) return null;
 
-  const roles = { digger: 0, forager: 0, explorer: 0, idle: 0 };
+  const roles = { digger: 0, forager: 0, explorer: 0, nurse: 0, idle: 0 };
   let avgEnergy = 0, stuckCount = 0, workerCount = 0;
   let minEnergy = Infinity, maxEnergy = 0;
 
@@ -185,16 +195,36 @@ function buildEvolutionSnapshot(checkpoint: any) {
   const totalCells = (227 - 61) * 320;
   const dugPct = checkpoint.totalDug ? ((checkpoint.totalDug / totalCells) * 100).toFixed(1) : '0';
 
+  // Brood counts
+  const brood = checkpoint.brood || [];
+  const broodCounts = { eggs: 0, larvae: 0, pupae: 0 };
+  for (const b of brood) {
+    if (b.stage === 0) broodCounts.eggs++;
+    else if (b.stage === 1) broodCounts.larvae++;
+    else if (b.stage === 2) broodCounts.pupae++;
+  }
+
+  // Chamber types
+  const chamberTypes: Record<string, number> = {};
+  for (const c of (checkpoint.chambers || [])) {
+    const t = c.type || 'general';
+    chamberTypes[t] = (chamberTypes[t] || 0) + 1;
+  }
+
   return {
     day: checkpoint.simDay || 1,
     frame: checkpoint.frame || 0,
     pop: workerCount,
     hasQueen: checkpoint.hasQueen || false,
+    queenUnderground: checkpoint.queenUnderground || false,
     dug: dugPct + '%',
     roles,
     food: (checkpoint.foods || []).reduce((s: number, f: any) => s + (f.amount || 0), 0),
+    storedFood: (checkpoint.foodStores || []).reduce((s: number, f: any) => s + (f.amount || 0), 0),
     foodSources: (checkpoint.foods || []).length,
+    brood: broodCounts,
     chambers: (checkpoint.chambers || []).length,
+    chamberTypes,
     avgEnergy,
     minEnergy: minEnergy === Infinity ? 0 : Math.round(minEnergy),
     maxEnergy: Math.round(maxEnergy),

@@ -102,7 +102,9 @@ function gameLoop() {
   ctx.clearRect(0, 0, AF.W, AF.H);
   AF.renderer.terrain(ctx, state);
   AF.renderer.silhouette(ctx);
-  AF.renderer.food(ctx, state.foods);
+  AF.renderer.chamberLabels(ctx, state.chambers);
+  AF.renderer.food(ctx, state.foods, state.foodStores);
+  AF.renderer.brood(ctx, state.brood);
   AF.renderer.particles(ctx, particles, terrainParticles);
   for (const ant of state.ants) {
     AF.renderer.ant(ctx, ant, hoveredAnt, particles);
@@ -177,6 +179,21 @@ function updateHUD() {
   elSDay.textContent = state.simDay;
   if (elStatusText) elStatusText.textContent = 'Day ' + state.simDay;
 
+  // Brood display
+  const elBrood = document.getElementById('sBrood');
+  if (elBrood && state.brood) {
+    const eggs = state.brood.filter(b => b.stage === AF.BROOD.EGG).length;
+    const larvae = state.brood.filter(b => b.stage === AF.BROOD.LARVA).length;
+    const pupae = state.brood.filter(b => b.stage === AF.BROOD.PUPA).length;
+    elBrood.textContent = eggs + 'e/' + larvae + 'l/' + pupae + 'p';
+  }
+
+  // Food stores
+  const elStored = document.getElementById('sStored');
+  if (elStored && state.foodStores) {
+    elStored.textContent = state.foodStores.reduce((s, f) => s + f.amount, 0);
+  }
+
   // Intelligence data (tracked in hidden elements)
   updateIntelBar();
 }
@@ -188,7 +205,8 @@ function updateIntelBar() {
     dig_chamber: 'Carving new chamber',
     forage: 'Foraging for food',
     rest: 'Colony resting',
-    explore: 'Exploring new paths'
+    explore: 'Exploring new paths',
+    nurse: 'Tending brood',
   };
 
   const PHASE_LABELS = {
@@ -213,7 +231,7 @@ function updateIntelBar() {
 
   if (elIntelRoles || elIntelRolesDisplay) {
     const roles = AF.colony.getRoleCounts(state);
-    const rolesText = 'D:' + roles.digger + ' \u00b7 F:' + roles.forager + ' \u00b7 E:' + roles.explorer + ' \u00b7 I:' + roles.idle;
+    const rolesText = 'D:' + roles.digger + ' \u00b7 F:' + roles.forager + ' \u00b7 N:' + roles.nurse + ' \u00b7 E:' + roles.explorer + ' \u00b7 I:' + roles.idle;
     if (elIntelRoles) elIntelRoles.innerHTML = rolesText;
     if (elIntelRolesDisplay) elIntelRolesDisplay.textContent = rolesText;
   }
@@ -279,7 +297,9 @@ function updateTooltip() {
     elTtName.textContent = a.name;
     elTtState.textContent = AF.ST_NAMES[a.state] || 'Unknown';
     elTtEnergy.textContent = Math.round(a.energy);
-    elTtRole.textContent = a.role + (a.isQueen ? ' (queen)' : '') + (a.carryingSand > 0 ? ' [hauling]' : '');
+    const matLabel = a.isQueen ? '' : (a.maturity < 0.35 ? ' (young)' : a.maturity > 0.65 ? ' (elder)' : '');
+    const carryLabel = a.carryingSand > 0 ? ' [hauling]' : (a.carryingFood > 0 ? ' [feeding]' : '');
+    elTtRole.textContent = a.role + (a.isQueen ? ' (queen)' : matLabel) + carryLabel;
     elTtThought.textContent = a.lastThought || '\u2014';
     elTooltip.classList.add('show');
     elTooltip.style.left = (mouseX + 16) + 'px';
