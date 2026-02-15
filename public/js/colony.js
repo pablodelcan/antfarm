@@ -77,6 +77,15 @@ AF.colony.create = function() {
   state.ants.push(queen);
   state.hasQueen = true;
 
+  // Scatter initial food on the surface so the colony can survive early
+  for (let i = 0; i < 5; i++) {
+    state.foods.push({
+      x: AF.W * 0.1 + Math.random() * AF.W * 0.8,
+      y: AF.SURFACE_PX - AF.CELL * 2,
+      amount: 4 + ((Math.random() * 6) | 0),
+    });
+  }
+
   return state;
 };
 

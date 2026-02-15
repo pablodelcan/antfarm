@@ -374,8 +374,8 @@ function _think(state, ant, s) {
       if (s.nearestFood && Math.hypot(s.nearestFood.x - ant.x, s.nearestFood.y - ant.y) < AF.CELL * 3) {
         s.nearestFood.amount -= 1;
         ant.carrying = true;
-        // Small nibble while picking up food (ants taste what they find)
-        ant.energy = Math.min(ant.energy + 20, ((state.tuning && state.tuning.antMaxEnergy) || 100) * 11);
+        // Nibble while picking up food (trophallaxis — ants taste/share food)
+        ant.energy = Math.min(ant.energy + 80, ((state.tuning && state.tuning.antMaxEnergy) || 100) * 11);
         _changeState(ant, ST.CARRY);
         AF.ant.setThought(ant, 'Found food!');
         return;
@@ -588,7 +588,7 @@ function _think(state, ant, s) {
     case ST.REST:
       // Max energy tunable by AI cron
       var maxE = ((state.tuning && state.tuning.antMaxEnergy) || 100) * 11;
-      ant.energy = Math.min(ant.energy + 0.3, maxE);
+      ant.energy = Math.min(ant.energy + 0.5, maxE);
       ant.vx *= 0.9;
       ant.vy *= 0.9;
       if (ant.stateTimer > ant.restDuration) {
@@ -910,26 +910,26 @@ function _moveEnter(state, ant, s, spd) {
       ant.vx += Math.sign(dx) * spd * 0.4;
       ant.heading = dx > 0 ? 0 : Math.PI;
     } else {
-      ant.vx *= 0.5;
+      // Snap to entrance column and dig straight down — keeps shaft narrow
+      ant.x = targetPx;
+      ant.vx = 0;
       ant.vy += spd * 0.6;
       ant.heading = Math.PI * 0.5;
       if (ant.digCD <= 0) {
-        // Dig entrance shaft - ant picks up sand
-        const dug1 = AF.terrain.dig(state, s.gx, s.gy + 1);
-        const dug2 = AF.terrain.dig(state, s.gx, s.gy + 2);
+        // Dig ONLY at entranceX column — single cell wide shaft
+        const dug1 = AF.terrain.dig(state, entranceX, s.gy + 1);
         if (dug1) ant.carryingSand = Math.min(ant.carryingSand + 1, ant.maxSandCarry);
-        if (dug2) ant.carryingSand = Math.min(ant.carryingSand + 1, ant.maxSandCarry);
         ant.digCD = B_DIG_CD_BASE;
       }
     }
   } else {
+    // Underground in the entrance shaft — stay aligned to entranceX
+    ant.x = targetPx;
+    ant.vx = 0;
     ant.vy += spd * 0.6;
-    ant.vx *= 0.3;
     if (ant.digCD <= 0) {
-      const dug1 = AF.terrain.dig(state, s.gx, s.gy + 1);
-      const dug2 = AF.terrain.dig(state, s.gx, s.gy + 2);
+      const dug1 = AF.terrain.dig(state, entranceX, s.gy + 1);
       if (dug1) ant.carryingSand = Math.min(ant.carryingSand + 1, ant.maxSandCarry);
-      if (dug2) ant.carryingSand = Math.min(ant.carryingSand + 1, ant.maxSandCarry);
       ant.digCD = B_DIG_CD_BASE;
     }
   }
@@ -1004,7 +1004,7 @@ function _moveDig(state, ant, s, spd) {
         ant.digCount++;
         ant.digCD = B_DIG_CD_BASE + (Math.random() * 4) | 0;
         ant.stuck = 0;
-        ant.energy -= 0.5; // digging is hard work
+        ant.energy -= 0.2; // digging is hard work
       }
     }
     // Dig current cell if stuck

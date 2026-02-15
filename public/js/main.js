@@ -519,3 +519,15 @@ function showAiModal() {
 function hideAiModal(event) {
   document.getElementById('aiModal').classList.remove('show');
 }
+
+// ═══════════════════════════════════════════════════════════════════
+//  HELP MODAL
+// ═══════════════════════════════════════════════════════════════════
+
+function showHelpModal() {
+  document.getElementById('helpModal').classList.add('show');
+}
+
+function hideHelpModal(event) {
+  document.getElementById('helpModal').classList.remove('show');
+}

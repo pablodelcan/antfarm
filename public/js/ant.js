@@ -24,7 +24,7 @@ AF.ant.create = function(x, y, isQueen) {
     prevState: AF.ST.IDLE,
 
     // Energy & lifecycle
-    energy: isQueen ? 99999 : (900 + Math.random() * 200),
+    energy: isQueen ? 99999 : (1500 + Math.random() * 300),
     age: 0,
     isQueen: !!isQueen,
 

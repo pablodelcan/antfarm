@@ -21,10 +21,10 @@ AF.SAND_R = 210;
 AF.SAND_G = 207;
 AF.SAND_B = 203;
 
-// Tunnel color — dark (near black for B&W palette)
-AF.TUNNEL_R = 40;
-AF.TUNNEL_G = 40;
-AF.TUNNEL_B = 40;
+// Tunnel color — medium dark gray (light enough to see black ants)
+AF.TUNNEL_R = 85;
+AF.TUNNEL_G = 80;
+AF.TUNNEL_B = 75;
 
 // Movement speeds (pixels per frame)
 AF.BASE_SPEED = 0.8;
